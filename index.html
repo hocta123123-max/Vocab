@@ -8428,7 +8428,7 @@ function afterProgressChange() { renderChips(); if (tab === "lookup") renderLook
    Người học bấm ⚑ Báo lỗi ở thẻ từ, Danh sách, hoặc sau khi trả lời. Báo lỗi luôn được lưu trên máy (localStorage "reports").
    Nếu REPORT_URL có link (Google Apps Script gắn với một Google Sheet), báo lỗi được gửi luôn về Sheet của chủ web.
    Chủ web xem tất cả ở tab "Báo lỗi" > "Dành cho chủ web": tải từ Sheet bằng mã xem, hoặc mở các file người học gửi. */
-const REPORT_URL = "";
+const REPORT_URL = "https://script.google.com/macros/s/AKfycbx4KOwvIvI7fvKqjwHfEVK3FwYCiXJgBLcicg5Bf18yIbTFIqI_0qWW0ot9qATpGdI3/exec";
 const RP_TYPES = { pic: "Hình minh họa xấu hoặc sai", mean: "Nghĩa tiếng Việt sai hoặc chưa sát", vague: "Từ còn mơ hồ, khó hiểu", usage: "Chưa rõ cách dùng, cần thêm ví dụ", ipa: "Phiên âm hoặc phát âm sai", other: "Lỗi khác" };
 const RP_BY_LABEL = Object.fromEntries(Object.entries(RP_TYPES).map(([k, v]) => [v, k]));
 let reports = store.get("reports", []);          // báo lỗi người học này đã gửi
