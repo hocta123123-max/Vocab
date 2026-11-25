@@ -7869,13 +7869,36 @@ function wordsFor(topicId, ignorePos) {
   else { const t = allTopics().find(x => x.id === topicId); list = t ? t.words.map(w => ({ ...w, topic: t.name })) : []; }
   return ignorePos ? list : list.filter(posOk);
 }
+// Ôn sớm (từ chưa đến hạn) mà trả lời đúng: giữ nguyên hộp và ngày hẹn, để ôn nhiều lần trong một ngày không đẩy từ lên hộp cao.
+// Trả lời sai thì vẫn về hộp 0 như cũ. Trả về true khi là lần ôn sớm.
 function grade(w, ok) {
   const s = stateOf(w);
+  if (ok && s.seen && !s.known && s.due > today()) return true;
   const box = ok ? Math.min(s.box + 1, INTERVALS.length - 1) : 0;
   progress[keyOf(w)] = { box, due: today() + INTERVALS[box] * DAY, seen: true };
   store.set("progress", progress);
   renderDue();
+  return false;
 }
+const fmtDay = (t) => { const d = new Date(t); return d.getDate() + "/" + (d.getMonth() + 1); };
+const earlyNote = (w) => { const s = stateOf(w); return `<span class="counter" style="display:block;margin-top:6px">Ôn sớm trước hạn nên từ giữ nguyên hộp ${s.box}, vẫn hẹn ôn ngày ${fmtDay(s.due)}.</span>`; };
+// Sửa dữ liệu cũ (một lần): trước bản này, ôn sớm cũng lên hộp, nên có từ lên hộp 3-5 chỉ sau 1-2 ngày.
+// Ngày ôn gần nhất = hạn - khoảng chờ của hộp. Hộp b cần ít nhất MIN_DAYS[b] ngày kể từ khi trang ra đời (23/11/2026),
+// từ nào vượt quá thì hạ về hộp cao nhất có thể đạt thật, và hẹn lại theo hộp đó. Không đụng từ "đã biết".
+(function fixEarlyBoxes() {
+  if (store.get("srsFix1", false)) return;
+  const START = new Date(2026, 10, 23).getTime(), MIN_DAYS = [0, 0, 1, 4, 11, 25];
+  let n = 0;
+  for (const k in progress) {
+    const s = progress[k];
+    if (!s || !s.seen || s.known || !(s.box >= 2)) continue;
+    const last = s.due - INTERVALS[s.box] * DAY, avail = Math.round((last - START) / DAY);
+    let b = s.box; while (b > 1 && MIN_DAYS[b] > avail) b--;
+    if (b < s.box) { progress[k] = { ...s, box: b, due: last + INTERVALS[b] * DAY }; n++; }
+  }
+  if (n) store.set("progress", progress);
+  store.set("srsFix1", n);
+})();
 const shuffle = (a) => { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 function highlight(ex, w) {
@@ -8252,11 +8275,12 @@ function checkTyped(skip) {
 function showResult(w, ok, typed) {
   quiz.answered = true;
   if (ok) quiz.score++; else quiz.wrong.push(w);
-  grade(w, ok);
+  const early = grade(w, ok);
   const yours = typed !== undefined && !ok ? (typed.trim() ? `Bạn gõ: <s>${esc(typed.trim())}</s>. ` : "") : "";
   document.getElementById("fb").innerHTML = ok
     ? `<span class="yay">${duck(YAY[quiz.score % YAY.length], "happy")}<span><b style="color:var(--good)">Quạc quạc, chính xác!</b><br><b>${esc(w.w)}</b> <span class="ipa">${esc(w.ipa || "")}</span> = ${picHtml(w, "pic-xs")} ${esc(w.vi)}${w.forms ? ` · quá khứ: ${esc(w.forms)}` : ""}${noteHtml(w, quizDir !== "en-vi")}</span></span>`
     : `<span class="yay">${duck("flop")}<span>${yours}Đáp án đúng: <b>${esc(w.w)}</b> <span class="ipa">${esc(w.ipa || "")}</span> nghĩa là “${picHtml(w, "pic-xs")} ${esc(w.vi)}”.${w.forms ? ` Quá khứ: ${esc(w.forms)}.` : ""}${noteHtml(w, quizDir !== "en-vi")}</span></span>`;
+  if (early) document.getElementById("fb").insertAdjacentHTML("beforeend", earlyNote(w));
   document.getElementById("fb").insertAdjacentHTML("beforeend", reportBtn(w));
   if (quizDir !== "en-vi") speak(w.w);
   const n = document.getElementById("q-next"); n.hidden = false; n.focus();
@@ -8410,7 +8434,7 @@ function rvAnswer(ok, typed) {
   if (!rv || rv.answered) return;
   rv.answered = true;
   const item = rv.q[rv.i], w = item.w, k = keyOf(w);
-  grade(w, ok);
+  const early = grade(w, ok);
   rv.undo = null;
   if (ok) { const first = !rv.missed.has(k) && !rv.done.has(k); if (first) rv.firstOk++; rv.done.add(k); rv.undo = { first }; }
   else {
@@ -8425,6 +8449,7 @@ function rvAnswer(ok, typed) {
   document.getElementById("rv-fb").innerHTML = ok
     ? `<span class="yay">${duck(YAY[rv.done.size % YAY.length], "happy")}<span><b style="color:var(--good)">Quạc quạc, nhớ rồi!</b><br><b>${esc(w.w)}</b> <span class="ipa">${esc(w.ipa || "")}</span> = ${picHtml(w, "pic-xs")} ${esc(w.vi)}${w.forms ? ` · quá khứ: ${esc(w.forms)}` : ""}${noteHtml(w, item.type !== "envi" && item.type !== "card")}<span class="row" id="rv-undo-row" style="margin-top:8px"><button class="btn bad" type="button" id="rv-undo">Vẫn chưa nhớ, hỏi lại sau</button></span></span></span>`
     : `<span class="yay">${duck("flop")}<span>${yours}<b>${esc(w.w)}</b> <span class="ipa">${esc(w.ipa || "")}</span> nghĩa là “${picHtml(w, "pic-xs")} ${esc(w.vi)}”.${w.forms ? ` Quá khứ: ${esc(w.forms)}.` : ""}${noteHtml(w, item.type !== "envi" && item.type !== "card")}<span class="counter">Từ này sẽ được hỏi lại sau vài câu.</span></span></span>`;
+  if (early) document.getElementById("rv-fb").insertAdjacentHTML("beforeend", earlyNote(w));
   document.getElementById("rv-fb").insertAdjacentHTML("beforeend", reportBtn(w));
   if (item.type !== "envi") speak(w.w);
   const n = document.getElementById("rv-next"); n.hidden = false; n.focus();
@@ -8496,7 +8521,7 @@ function renderProgress() {
     </div>
     <div style="display:grid;gap:10px">${rows}</div>
     <div class="legend">${BOX_COLORS.map((c, i) => `<span style="--c:${c}">Hộp ${i}${i === 0 ? " (mới / quên)" : ""}${i ? ` · ôn sau ${INTERVALS[i]} ngày` : ""}</span>`).join("")}</div>
-    <p class="counter" style="margin:0">Mỗi lần nhớ đúng, từ lên một hộp và được ôn lại thưa hơn. Trả lời sai thì từ về hộp 0.</p>
+    <p class="counter" style="margin:0">Mỗi lần nhớ đúng <b>khi từ đã đến hạn</b>, từ lên một hộp và được ôn lại thưa hơn. Ôn sớm trước hạn thì đúng cũng giữ nguyên hộp. Trả lời sai thì từ về hộp 0. Từ ở hộp 5 vẫn được hẹn ôn lại mỗi 30 ngày (trừ từ bạn bấm “đã biết”).</p>
     <div class="row" id="resetRow"><button class="btn ghost" id="reset">Xóa tiến độ học</button></div>`;
 }
 
