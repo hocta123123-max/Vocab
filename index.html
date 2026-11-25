@@ -45,19 +45,33 @@
   --good: #72d79c; --bad: #ff8d82; --good-bg: #173324; --bad-bg: #3f1f1b; color-scheme: dark;
 }
 * { box-sizing: border-box; }
-.duck { display: inline-block; flex: none; }
+.duck { display: inline-block; flex: none; overflow: visible; }
 .brand { display: flex; align-items: center; gap: 10px; }
-.brand .duck { width: 76px; height: 76px; animation: bob 3.4s ease-in-out infinite; transform-origin: 50% 100%; }
+.brand .duck { width: 80px; height: 80px; animation: bob 3.4s ease-in-out infinite; transform-origin: 50% 100%; }
 @keyframes bob { 0%, 100% { transform: rotate(-4deg); } 50% { transform: rotate(4deg) translateY(-2px); } }
-.stage { position: relative; margin-top: 40px; }
-.stage > .duck { position: absolute; width: 62px; height: 62px; right: 10px; top: -50px; z-index: 0; pointer-events: none; }
+.stage { position: relative; margin-top: 52px; }
+.stage > .duck { position: absolute; width: 76px; height: 76px; right: 14px; top: -66px; z-index: 0; pointer-events: none; animation: peek .45s ease-out; }
+@keyframes peek { from { transform: translateY(26px); } to { transform: none; } }
 .stage .card { z-index: 1; }
 .yay { display: flex; align-items: center; gap: 10px; }
-.yay .duck { width: 58px; height: 58px; animation: hop .5s ease-out; }
+.yay .duck { width: 66px; height: 66px; animation: hop .5s ease-out; }
+.yay .duck-flop { animation: flop .5s ease-out; }
 @keyframes hop { 0% { transform: translateY(10px) scale(.85); } 60% { transform: translateY(-6px) scale(1.04); } 100% { transform: none; } }
-.empty .duck { width: 96px; height: 96px; display: block; margin: 0 auto 8px; }
-.result-duck .duck { width: 88px; height: 88px; animation: hop .6s ease-out; }
-@media (prefers-reduced-motion: reduce) { .brand .duck, .yay .duck { animation: none; } }
+@keyframes flop { 0% { transform: rotate(-30deg) translateY(-8px); } 70% { transform: rotate(4deg); } 100% { transform: none; } }
+.empty .duck { width: 110px; height: 110px; display: block; margin: 0 auto 8px; }
+.empty .duck-stack { width: 84px; height: 140px; }
+.result-duck .duck { width: 104px; height: 104px; animation: hop .6s ease-out; }
+.phead { display: flex; justify-content: space-between; align-items: flex-end; gap: 10px; margin: -8px 0 -6px; }
+.phead .duck { width: 66px; height: 66px; }
+.dbar { position: relative; padding-top: 30px; }
+.bar-duck { position: absolute; bottom: 0; transition: left .3s, transform .3s; pointer-events: none; }
+.bar-duck .duck { display: block; width: 38px; height: 38px; }
+.parade { display: flex; justify-content: center; }
+.parade .duck { width: 300px; max-width: 90%; height: 60px; }
+.parade .duck .wd { animation: waddle 1.1s ease-in-out infinite; transform-box: fill-box; transform-origin: 50% 100%; }
+.parade .duck g:nth-child(odd) > .wd { animation-delay: -.55s; }
+@keyframes waddle { 0%, 100% { transform: rotate(-5deg); } 50% { transform: rotate(5deg); } }
+@media (prefers-reduced-motion: reduce) { .brand .duck, .yay .duck, .stage > .duck, .result-duck .duck, .parade .duck .wd { animation: none; } .bar-duck { transition: none; } }
 [hidden] { display: none !important; }
 body {
   background: var(--bg) var(--pattern) repeat; color: var(--ink); font-family: var(--font-body); font-size: 16px; line-height: 1.5;
@@ -295,6 +309,7 @@ ul.review li b { min-width: 0; }
   <!-- LOOKUP -->
   <section id="tab-lookup" hidden>
     <div class="panel">
+      <div class="phead"><p class="label" style="margin:0">Danh sách từ</p><span id="lookDuck"></span></div>
       <label class="field">Tìm trong toàn bộ từ (tiếng Anh hoặc tiếng Việt, không cần dấu)<input type="text" id="q" placeholder="vd: kettle, cai keo, ghen ti..." autocomplete="off"></label>
       <p class="counter" id="lookupInfo" style="margin:0"></p>
       <div class="lookup" id="lookupList"></div>
@@ -315,7 +330,7 @@ ul.review li b { min-width: 0; }
   <!-- ADD -->
   <section id="tab-add" hidden>
     <div class="panel">
-      <p class="label" style="margin:0">Thêm từ của bạn</p>
+      <div class="phead"><p class="label" style="margin:0">Thêm từ của bạn</p><span id="addDuck"></span></div>
       <form id="addForm" class="grid2">
         <label class="field">Từ / cụm từ tiếng Anh *<input type="text" id="f-w" required placeholder="vd: grab a bite"></label>
         <label class="field">Nghĩa tiếng Việt *<input type="text" id="f-vi" required placeholder="vd: ăn nhanh một chút"></label>
@@ -332,6 +347,7 @@ ul.review li b { min-width: 0; }
       </div>
     </div>
   </section>
+  <div class="parade" id="parade" aria-hidden="true"></div>
   <p class="credit">Hình minh họa 3D: Microsoft Fluent Emoji (giấy phép MIT)</p>
 </div>
 <div class="toast" id="toast" role="status"></div>
@@ -7838,36 +7854,100 @@ function highlight(ex, w) {
   return esc(ex).replace(re, "<mark>$1</mark>");
 }
 
-/* ---------- sticker vịt ---------- */
-function duck(mood = "plain") {
-  const K = "#1f1a17", O = "#ff9a2e", S = "#d98a2b";
-  const spark = (x, y, r) => `<path d="M${x} ${y - r}C${x + r * .18} ${y - r * .18} ${x + r * .18} ${y - r * .18} ${x + r} ${y}C${x + r * .18} ${y + r * .18} ${x + r * .18} ${y + r * .18} ${x} ${y + r}C${x - r * .18} ${y + r * .18} ${x - r * .18} ${y + r * .18} ${x - r} ${y}C${x - r * .18} ${y - r * .18} ${x - r * .18} ${y - r * .18} ${x} ${y - r}Z" fill="${S}" stroke="${K}" stroke-width="1.2"/>`;
-  const eyes = {
-    plain: `<circle cx="42" cy="27" r="2.4" fill="${K}"/><circle cx="55" cy="26" r="2.4" fill="${K}"/>`,
-    happy: `<path d="M38.5 28q3.5-5 7 0M51.5 27q3.5-5 7 0" fill="none" stroke="${K}" stroke-width="2.6" stroke-linecap="round"/>`,
-    sad: `<circle cx="42" cy="28" r="2.4" fill="${K}"/><circle cx="55" cy="27" r="2.4" fill="${K}"/><path d="M37 23.5l8-3M52 19.5l8 3" stroke="${K}" stroke-width="2.2" stroke-linecap="round"/><path d="M40.5 32q-1.8 3.5 0 5q1.8-1.5 0-5z" fill="#7cc4ff" stroke="${K}" stroke-width="1"/>`,
-    sleepy: `<path d="M38.5 27.5h7M51.5 26.5h7" stroke="${K}" stroke-width="2.6" stroke-linecap="round"/>`,
-    wow: `<circle cx="42" cy="27" r="3.6" fill="#fff" stroke="${K}" stroke-width="2"/><circle cx="42.6" cy="27.4" r="1.6" fill="${K}"/><circle cx="55" cy="26" r="3.6" fill="#fff" stroke="${K}" stroke-width="2"/><circle cx="55.6" cy="26.4" r="1.6" fill="${K}"/>`,
-  }[mood] || "";
-  const extra = {
-    plain: spark(16, 52, 5) + spark(10, 62, 3.2),
-    happy: spark(16, 18, 5) + spark(84, 12, 4) + spark(12, 32, 3) + `<ellipse cx="38" cy="36" rx="4" ry="2.4" fill="#ffb3a7" opacity=".8"/>`,
-    sad: ``,
-    sleepy: `<text x="66" y="16" font-family="system-ui,sans-serif" font-weight="700" font-size="11" fill="${K}">z</text><text x="74" y="9" font-family="system-ui,sans-serif" font-weight="700" font-size="8" fill="${K}">z</text>`,
-    wow: spark(14, 20, 5) + spark(86, 14, 5) + spark(88, 34, 3),
-  }[mood] || "";
-  const beakOpen = mood === "happy" || mood === "wow";
-  return `<svg class="duck duck-${mood}" viewBox="0 0 100 100" aria-hidden="true">
-    ${extra}
-    <path d="M31 100C30 86 34 72 31 62C21 58 17 47 19 36C21 20 32 11 45 11C58 11 68 19 69 31C69 37 71 41 70 45C67 49 63 52 62 58C61 72 66 86 70 100Z" fill="#fff" stroke="${K}" stroke-width="3.2" stroke-linejoin="round"/>
-    <path d="M56 32C64 29 76 30 82 33C86 35 86 39 82 40C76 41 64 41 56 40Z" fill="${O}" stroke="${K}" stroke-width="2.4" stroke-linejoin="round"/>
-    <path d="M60 ${beakOpen ? 43 : 41}C66 ${beakOpen ? 43 : 41} 74 ${beakOpen ? 44 : 42} 78 ${beakOpen ? 46 : 44}C80 ${beakOpen ? 48 : 46} 77 ${beakOpen ? 51 : 48} 72 ${beakOpen ? 51 : 48}C66 ${beakOpen ? 51 : 48} 62 ${beakOpen ? 49 : 47} 60 ${beakOpen ? 46 : 45}Z" fill="${O}" stroke="${K}" stroke-width="2.4" stroke-linejoin="round"/>
-    <path d="M50 38C46 37 42 38 40 40" fill="none" stroke="${K}" stroke-width="2.2" stroke-linecap="round"/>
-    ${eyes}
-    <path d="M37 74C42 80 50 81 55 77" fill="none" stroke="${K}" stroke-width="2.4" stroke-linecap="round"/>
-  </svg>`;
+/* ---------- sticker vịt meme: một bộ vẽ chung (thân trắng, viền mực dày, mỏ cam) ---------- */
+const DK = { K: "#1f1a17", O: "#ff9a2e", W: "#fff", Y: "#ffd23f", P: "#ffb3a7" };
+function dkEyes(m, x, y) {
+  const { K } = DK;
+  switch (m) {
+    case "happy": return `<path d="M${x - 3.6} ${y + 1.5}q3.6-5.4 7.2 0" fill="none" stroke="${K}" stroke-width="2.8" stroke-linecap="round"/>`;
+    case "sleepy": return `<path d="M${x - 3.6} ${y + .5}h7.2" stroke="${K}" stroke-width="2.8" stroke-linecap="round"/>`;
+    case "wow": return `<circle cx="${x}" cy="${y}" r="4.2" fill="#fff" stroke="${K}" stroke-width="2"/><circle cx="${x + .8}" cy="${y + .4}" r="1.9" fill="${K}"/>`;
+    case "angry": return `<circle cx="${x}" cy="${y + 1}" r="2.6" fill="${K}"/><path d="M${x - 6} ${y - 6}l11 4" stroke="${K}" stroke-width="2.8" stroke-linecap="round"/>`;
+    case "sad": return `<circle cx="${x}" cy="${y + 1}" r="2.6" fill="${K}"/><path d="M${x - 5} ${y - 3}l9-3" stroke="${K}" stroke-width="2.4" stroke-linecap="round"/><path d="M${x - 2} ${y + 6}q-2 4 0 5.6q2-1.6 0-5.6z" fill="#7cc4ff" stroke="${K}" stroke-width="1"/>`;
+    case "dizzy": return `<path d="M${x - 3} ${y - 3}l6 6M${x + 3} ${y - 3}l-6 6" stroke="${K}" stroke-width="2.6" stroke-linecap="round"/>`;
+    default: return `<circle cx="${x}" cy="${y}" r="2.7" fill="${K}"/><circle cx="${x + .9}" cy="${y - .9}" r=".8" fill="#fff"/>`;
+  }
 }
-document.getElementById("brand").insertAdjacentHTML("afterbegin", duck("plain"));
+function dkSpark(x, y, r, c = "#ffd23f") {
+  const k = r * .2;
+  return `<path d="M${x} ${y - r}C${x + k} ${y - k} ${x + k} ${y - k} ${x + r} ${y}C${x + k} ${y + k} ${x + k} ${y + k} ${x} ${y + r}C${x - k} ${y + k} ${x - k} ${y + k} ${x - r} ${y}C${x - k} ${y - k} ${x - k} ${y - k} ${x} ${y - r}Z" fill="${c}" stroke="${DK.K}" stroke-width="1.4" stroke-linejoin="round"/>`;
+}
+/* vịt đứng nhìn sang phải, khung 120×120. o: { eyes, body (màu thân), beak: "open", feet: false, back, front, head (vẽ đè lên đầu) } */
+function dkDuck(o = {}) {
+  const { K, O } = DK, B = o.body || DK.W;
+  const feet = o.feet === false ? "" : `<path d="M47 100l-3 11c5 2 12 2 17 0l-3-11zM67 100l-2 11c5 2 12 2 17 0l-4-11z" fill="${O}" stroke="${K}" stroke-width="2.6" stroke-linejoin="round"/>`;
+  const body = `<path d="M62 15C72 15 80 23 79 34C78 44 73 48 75 58C88 64 97 74 95 86C93 99 80 105 62 105C44 105 30 99 25 88C22 81 20 73 14 66C22 67 30 66 36 63C42 60 46 55 46 46C45 41 45 37 46 31C48 21 54 15 62 15Z" fill="${B}" stroke="${K}" stroke-width="3.2" stroke-linejoin="round"/>`;
+  const wing = `<path d="M44 74C52 88 72 90 82 78" fill="none" stroke="${K}" stroke-width="2.8" stroke-linecap="round"/>`;
+  const head = o.headOnly ? `<circle cx="62" cy="32" r="17" fill="${B}" stroke="${K}" stroke-width="3.2"/>` : "";
+  const beak = o.beak === "open"
+    ? `<path d="M75 33L97 23Q91 32 95 42Z" fill="#c0392b" stroke="${K}" stroke-width="2" stroke-linejoin="round"/><path d="M74 27C82 21 92 19 99 21C96 27 86 31 75 33Z" fill="${O}" stroke="${K}" stroke-width="2.6" stroke-linejoin="round"/><path d="M75 34C84 35 93 38 97 43C90 45 81 42 75 38Z" fill="${O}" stroke="${K}" stroke-width="2.6" stroke-linejoin="round"/>`
+    : `<path d="M74 28C84 26 94 28 98 33C95 38 84 40 74 38C76 35 76 31 74 28Z" fill="${O}" stroke="${K}" stroke-width="2.6" stroke-linejoin="round"/>`;
+  const blush = o.eyes === "happy" || o.eyes === "wow" ? `<ellipse cx="64" cy="38" rx="4" ry="2.4" fill="${DK.P}" opacity=".85"/>` : "";
+  return (o.back || "") + feet + body + wing + (o.mid || "") + head + beak + blush + dkEyes(o.eyes, 67, 27) + (o.water || "") + (o.front0 || "") + (o.front || "");
+}
+/* ngỗng cổ dài (cho meme “honk” và cầm dao), khung 120×120 */
+function dkGoose(o = {}) {
+  const { K, O } = DK;
+  const body = `<path d="M72 9C80 9 85 15 84 23C83 30 79 33 79 40C79 48 80 54 84 60C94 66 100 76 97 87C94 98 80 104 60 104C40 104 24 98 20 86C18 79 16 73 10 66C18 67 26 66 32 63C42 58 56 58 62 52C64 44 63 36 62 28C61 16 65 9 72 9Z" fill="#fff" stroke="${K}" stroke-width="3.2" stroke-linejoin="round"/>`;
+  const feet = `<path d="M45 99l-3 12c5 2 12 2 17 0l-3-12zM67 99l-2 12c5 2 12 2 17 0l-4-12z" fill="${O}" stroke="${K}" stroke-width="2.6" stroke-linejoin="round"/>`;
+  const wing = `<path d="M38 76C48 90 70 92 84 80" fill="none" stroke="${K}" stroke-width="2.8" stroke-linecap="round"/>`;
+  const beak = o.beak === "open"
+    ? `<path d="M82 19L103 8Q97 19 102 32Z" fill="#c0392b" stroke="${K}" stroke-width="2" stroke-linejoin="round"/><path d="M80 15C88 9 98 5 105 6C103 12 93 17 82 20Z" fill="${O}" stroke="${K}" stroke-width="2.6" stroke-linejoin="round"/><path d="M82 22C90 23 99 27 103 33C96 35 87 31 81 27Z" fill="${O}" stroke="${K}" stroke-width="2.6" stroke-linejoin="round"/>`
+    : `<path d="M81 16C90 15 98 17 102 22C98 26 90 28 81 27C83 23 83 20 81 16Z" fill="${O}" stroke="${K}" stroke-width="2.6" stroke-linejoin="round"/>`;
+  return (o.back || "") + feet + body + wing + (o.mid || "") + beak + dkEyes(o.eyes, 74, 17) + (o.front || "");
+}
+const DUCK_ART = {
+  /* vịt đeo kính râm */
+  cool: (e) => dkDuck({ eyes: e, front: `<path d="M46 25L58 23" stroke="${DK.K}" stroke-width="3" stroke-linecap="round"/><path d="M56 21H81C82 29 78 34 71 34C64 34 61 29 61 25H56Z" fill="${DK.K}"/><path d="M66 24l-3 5M72 24l-3 6" stroke="#fff" stroke-width="1.6" stroke-linecap="round" opacity=".8"/>` }) + dkSpark(102, 14, 6) + dkSpark(110, 30, 3.5),
+  /* vịt đội mũ lưỡi trai ngược */
+  cap: (e) => dkDuck({ eyes: e, front: `<path d="M47 22C48 10 72 6 78 20C70 17 56 17 47 22Z" fill="#4f8ef7" stroke="${DK.K}" stroke-width="2.6" stroke-linejoin="round"/><path d="M50 21L36 27C35 29 37 31 39 30L52 25Z" fill="#e8553f" stroke="${DK.K}" stroke-width="2.4" stroke-linejoin="round"/><circle cx="63" cy="10.5" r="2" fill="#e8553f" stroke="${DK.K}" stroke-width="1.4"/>` }),
+  /* vịt đội ếch */
+  frog: (e) => dkDuck({ eyes: e, front: `<path d="M48 18C48 8 76 6 76 18C70 21 54 21 48 18Z" fill="#7cc96b" stroke="${DK.K}" stroke-width="2.6" stroke-linejoin="round"/><circle cx="55" cy="8" r="5" fill="#7cc96b" stroke="${DK.K}" stroke-width="2.4"/><circle cx="69" cy="8" r="5" fill="#7cc96b" stroke="${DK.K}" stroke-width="2.4"/><circle cx="55.5" cy="8" r="2" fill="${DK.K}"/><circle cx="69.5" cy="8" r="2" fill="${DK.K}"/><path d="M57 15q5 3 10 0" fill="none" stroke="${DK.K}" stroke-width="1.8" stroke-linecap="round"/><ellipse cx="52" cy="14" rx="2" ry="1.2" fill="${DK.P}"/><ellipse cx="72" cy="14" rx="2" ry="1.2" fill="${DK.P}"/>` }),
+  /* vịt chui qua lát bánh mì */
+  bread: (e) => dkDuck({ eyes: e, headOnly: true, mid: `<path d="M26 52C21 40 34 33 43 39C50 32 72 32 79 39C88 33 100 41 94 52L92 82C92 86 90 88 86 88H36C32 88 30 86 30 82Z" fill="#f2c27b" stroke="${DK.K}" stroke-width="3" stroke-linejoin="round"/><path d="M34 54C32 46 40 42 46 46C52 40 70 40 76 46C82 42 90 46 88 54L86 80H38Z" fill="#fde7b8"/><circle cx="44" cy="64" r="1.3" fill="#d9a35a"/><circle cx="78" cy="70" r="1.3" fill="#d9a35a"/><circle cx="58" cy="76" r="1.3" fill="#d9a35a"/>` }),
+  /* vịt đội mũ tiệc + pháo giấy */
+  party: (e) => dkDuck({ eyes: e || "happy", beak: "open", back: `<rect x="10" y="20" width="6" height="3" rx="1" fill="#4f8ef7" transform="rotate(-30 13 21)"/><rect x="96" y="50" width="6" height="3" rx="1" fill="#e8553f" transform="rotate(25 99 51)"/><rect x="20" y="44" width="5" height="3" rx="1" fill="#7cc96b" transform="rotate(40 22 45)"/><circle cx="104" cy="66" r="2" fill="#ffd23f" stroke="${DK.K}" stroke-width="1"/><circle cx="30" cy="10" r="2" fill="#ff7eb6" stroke="${DK.K}" stroke-width="1"/>`, front: `<path d="M50 19L63 -2L76 19C68 22 58 22 50 19Z" fill="#ff7eb6" stroke="${DK.K}" stroke-width="2.6" stroke-linejoin="round"/><path d="M56 10L69 8M53 15L73 13" stroke="#fff" stroke-width="2.4" stroke-linecap="round"/><circle cx="63" cy="-2" r="4" fill="#ffd23f" stroke="${DK.K}" stroke-width="2"/>` }) + dkSpark(104, 10, 6) + dkSpark(14, 60, 4, "#ff7eb6"),
+  /* vịt phao bơi */
+  float: (e) => dkDuck({ eyes: e, feet: false, water: `<path d="M4 102C20 96 34 108 50 102C66 96 80 108 96 102C104 99 110 100 116 102V114H4Z" fill="#9fd8ff" stroke="${DK.K}" stroke-width="2.4" stroke-linejoin="round"/>`, front0: `<path d="M14 80C14 100 106 100 106 80C106 72 98 70 92 70C90 84 30 84 28 70C22 70 14 72 14 80Z" fill="#ff6f61" stroke="${DK.K}" stroke-width="3" stroke-linejoin="round"/><path d="M30 86L36 94M58 89V98M84 86L80 94" stroke="#fff" stroke-width="6"/><path d="M14 80C14 100 106 100 106 80" fill="none" stroke="${DK.K}" stroke-width="3"/><path d="M20 106q6-3 12 0M78 108q6-3 12 0" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"/>` }),
+  /* vịt trượt ván */
+  skate: (e) => `<g transform="translate(0 -6)">` + dkDuck({ eyes: e, front: `<path d="M47 22C48 10 72 6 78 20C70 17 56 17 47 22Z" fill="#2a221c" stroke="${DK.K}" stroke-width="2.6"/><path d="M76 19L90 21C91 23 89 25 87 24L74 23Z" fill="#2a221c" stroke="${DK.K}" stroke-width="2.4" stroke-linejoin="round"/>` }) + `</g><path d="M20 108H102C106 108 106 113 102 113H22C16 113 16 108 20 108Z" fill="#ffd23f" stroke="${DK.K}" stroke-width="2.6" stroke-linejoin="round"/><circle cx="34" cy="116" r="3.6" fill="#fff" stroke="${DK.K}" stroke-width="2.2"/><circle cx="88" cy="116" r="3.6" fill="#fff" stroke="${DK.K}" stroke-width="2.2"/><path d="M2 78H14M0 90H12M4 102H14" stroke="${DK.K}" stroke-width="2.4" stroke-linecap="round" opacity=".6"/>`,
+  /* ngỗng hét HONK */
+  honk: (e) => dkGoose({ eyes: e || "angry", beak: "open" }) + `<path d="M108 4l6-4M110 16h8M108 28l6 4" stroke="${DK.K}" stroke-width="2.6" stroke-linecap="round"/>`,
+  /* ngỗng cầm dao (peace was never an option) */
+  /* vịt đi thi: mũ tốt nghiệp, kính tròn, bút chì to */
+  exam: (e) => dkDuck({ eyes: e, front: `<circle cx="68" cy="27" r="6.5" fill="#fff" fill-opacity=".35" stroke="${DK.K}" stroke-width="2.4"/><path d="M61.5 26L50 25" stroke="${DK.K}" stroke-width="2.4" stroke-linecap="round"/><path d="M50 15V21C56 25 68 25 74 21V15Z" fill="#2a221c" stroke="${DK.K}" stroke-width="2.4" stroke-linejoin="round"/><path d="M40 13L62 4L84 13L62 22Z" fill="#3a3a48" stroke="${DK.K}" stroke-width="2.6" stroke-linejoin="round"/><path d="M62 13L82 15L83 27" fill="none" stroke="#ffd23f" stroke-width="2.4" stroke-linecap="round"/><path d="M80 27h6l-1 7h-4z" fill="#ffd23f" stroke="${DK.K}" stroke-width="1.6" stroke-linejoin="round"/><g transform="rotate(-38 66 80)"><rect x="40" y="75" width="44" height="10" fill="#ffd23f" stroke="${DK.K}" stroke-width="2.4"/><path d="M40 75V85" stroke="${DK.K}" stroke-width="2"/><rect x="31" y="75" width="9" height="10" rx="2" fill="#ff9fb3" stroke="${DK.K}" stroke-width="2.4"/><path d="M84 75L98 80L84 85Z" fill="#f2c27b" stroke="${DK.K}" stroke-width="2.4" stroke-linejoin="round"/><path d="M93 78L98 80L93 82Z" fill="${DK.K}"/><path d="M44 80H80" stroke="#e0a800" stroke-width="1.6"/></g>` }) + `<g transform="rotate(-8 14 92)"><rect x="0" y="74" width="24" height="30" rx="2" fill="#fff" stroke="${DK.K}" stroke-width="2.4"/><path d="M5 82l3 3 6-6M5 93l3 3 6-6" fill="none" stroke="#1b8a48" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></g>` + dkSpark(104, 8, 5),
+  /* vịt nằm úp mặt (nằm thẳng) */
+  flop: (e) => `<path d="M4 105H116" stroke="${DK.K}" stroke-width="2.4" stroke-linecap="round" opacity=".35"/><path d="M42 74L39 60M56 71L57 57" stroke="${DK.K}" stroke-width="2.6" stroke-linecap="round"/><path d="M31 60C33 52 45 52 47 60L39 63Z" fill="${DK.O}" stroke="${DK.K}" stroke-width="2.4" stroke-linejoin="round"/><path d="M49 57C51 49 63 49 65 57L57 60Z" fill="${DK.O}" stroke="${DK.K}" stroke-width="2.4" stroke-linejoin="round"/><path d="M12 74C22 80 30 78 36 74C50 66 72 66 84 76C90 72 104 72 110 82C114 90 112 104 100 104H28C16 104 10 94 12 74Z" fill="#fff" stroke="${DK.K}" stroke-width="3.2" stroke-linejoin="round"/><path d="M36 90C48 98 66 98 78 90" fill="none" stroke="${DK.K}" stroke-width="2.6" stroke-linecap="round"/><path d="M106 94C114 94 121 97 123 103L105 104Z" fill="${DK.O}" stroke="${DK.K}" stroke-width="2.4" stroke-linejoin="round"/>${dkEyes(e || "dizzy", 100, 86)}<path d="M84 52q2 4 0 6q-2-2 0-6z" fill="#7cc4ff" stroke="${DK.K}" stroke-width="1"/><path d="M92 62q5-3 2-8M100 64q6-2 6-8" fill="none" stroke="${DK.K}" stroke-width="2" stroke-linecap="round" opacity=".5"/>`,
+};
+/* ba con vịt chồng lên nhau, khung 120×200 */
+function dkStack(e) {
+  return `<g transform="translate(18 0) scale(.7)">${dkDuck({ eyes: e })}</g>`
+    + `<g transform="translate(102 58) scale(-.7 .7)">${dkDuck({ eyes: e === "sleepy" ? "sleepy" : "plain" })}</g>`
+    + `<g transform="translate(14 116) scale(.78)">${dkDuck({ eyes: e === "happy" ? "happy" : "sleepy" })}</g>`;
+}
+/* đàn vịt đi dạo (trang trí chân trang), khung 360×70 */
+function dkParade() {
+  const baby = (x) => `<g transform="translate(${x} 30) scale(.34)"><g class="wd">${dkDuck({ body: DK.Y, eyes: "plain" })}</g></g>`;
+  return `<g transform="translate(250 -2) scale(.62)"><g class="wd">${dkDuck({ eyes: "plain", front: `<path d="M47 22C48 10 72 6 78 20C70 17 56 17 47 22Z" fill="#4f8ef7" stroke="${DK.K}" stroke-width="2.6"/>` })}</g></g>` + baby(200) + baby(160) + baby(120) + `<g transform="translate(70 30) scale(.34)"><g class="wd">${dkDuck({ body: DK.Y, eyes: "happy", front: `<path d="M46 25L58 23" stroke="${DK.K}" stroke-width="3"/><path d="M56 21H81C82 29 78 34 71 34C64 34 61 29 61 25H56Z" fill="${DK.K}"/>` })}</g></g>`;
+}
+/* duck(kind, mood): kind = cool|cap|frog|bread|party|float|skate|honk|exam|flop|stack|parade. Tương thích tên cũ: plain/happy/sad/sleepy/wow */
+function duck(kind = "cool", mood) {
+  const OLD = { plain: ["cool"], happy: ["party", "happy"], sad: ["flop"], sleepy: ["stack", "sleepy"], wow: ["frog", "wow"] };
+  if (OLD[kind]) [kind, mood = mood] = [OLD[kind][0], mood || OLD[kind][1]];
+  const vb = kind === "stack" ? "0 0 120 200" : kind === "parade" ? "0 0 360 70" : "-6 -10 132 132";
+  const art = kind === "stack" ? dkStack(mood) : kind === "parade" ? dkParade() : (DUCK_ART[kind] || DUCK_ART.cool)(mood);
+  return `<svg class="duck duck-${kind}" viewBox="${vb}" aria-hidden="true" overflow="visible">${art}</svg>`;
+}
+/* đầu panel có vịt ngồi bên phải */
+function pHead(label, kind, mood) { return `<div class="phead"><p class="label" style="margin:0">${label}</p>${duck(kind, mood)}</div>`; }
+/* thanh tiến độ có vịt trượt ván chạy theo */
+function duckBar(frac) { const p = Math.max(0, Math.min(1, frac)) * 100; return `<div class="dbar"><div class="bar"><i style="width:${p}%"></i></div><span class="bar-duck" style="left:${p}%;transform:translateX(-${p}%)">${duck("skate")}</span></div>`; }
+const PEEK = ["frog", "cap", "cool", "bread", "skate", "float"];
+const YAY = ["honk", "party", "cool"];
+document.getElementById("brand").insertAdjacentHTML("afterbegin", duck("cool"));
+document.getElementById("parade").innerHTML = duck("parade");
+document.getElementById("addDuck").outerHTML = duck("bread");
+document.getElementById("lookDuck").outerHTML = duck("cap");
 
 /* ---------- phát âm ---------- */
 function speak(text) {
@@ -7967,16 +8047,16 @@ function renderCard() {
   const area = document.getElementById("cardArea");
   if (!deck.length) {
     const allKnown = topic !== "due" && wordsFor(topic).length > 0;
-    area.innerHTML = `<div class="empty">${duck("sleepy")}${allKnown ? `Bạn đã đánh dấu “đã biết” mọi từ ở đây. Muốn học lại, vào tab <b>Tiến độ</b>, phần “Từ đã thuộc”.` : topic === "due" ? "Hôm nay chưa có từ nào đến lượt ôn. Chọn một chủ đề để học từ mới." : topic === "multi" && !picks.length ? "Hãy bấm chọn một hoặc nhiều chủ đề ở trên." : "Không có từ nào khớp với chủ đề và loại từ đang chọn."}</div>`;
+    area.innerHTML = `<div class="empty">${duck("stack", "sleepy")}${allKnown ? `Bạn đã đánh dấu “đã biết” mọi từ ở đây. Muốn học lại, vào tab <b>Tiến độ</b>, phần “Từ đã thuộc”.` : topic === "due" ? "Hôm nay chưa có từ nào đến lượt ôn. Chọn một chủ đề để học từ mới." : topic === "multi" && !picks.length ? "Hãy bấm chọn một hoặc nhiều chủ đề ở trên." : "Không có từ nào khớp với chủ đề và loại từ đang chọn."}</div>`;
     return;
   }
   if (idx >= deck.length) {
-    area.innerHTML = `<div class="empty">${duck("happy")}<p style="margin:0 0 12px;font-weight:600;color:var(--ink)">Xong một lượt.${missed.size ? ` Có ${missed.size} từ bạn đã bấm “Chưa nhớ”.` : " Bạn nhớ hết rồi!"}</p><div class="row" style="justify-content:center">${missed.size ? `<button class="btn primary" id="again-missed">Ôn lại ${missed.size} từ chưa nhớ</button>` : ""}<button class="btn ${missed.size ? "" : "primary"}" id="again">Học lại lượt mới</button><button class="btn" data-goto="quiz">Làm bài kiểm tra</button></div></div>`;
+    area.innerHTML = `<div class="empty">${duck(missed.size ? "cool" : "party")}<p style="margin:0 0 12px;font-weight:600;color:var(--ink)">Xong một lượt.${missed.size ? ` Có ${missed.size} từ bạn đã bấm “Chưa nhớ”.` : " Bạn nhớ hết rồi!"}</p><div class="row" style="justify-content:center">${missed.size ? `<button class="btn primary" id="again-missed">Ôn lại ${missed.size} từ chưa nhớ</button>` : ""}<button class="btn ${missed.size ? "" : "primary"}" id="again">Học lại lượt mới</button><button class="btn" data-goto="quiz">Làm bài kiểm tra</button></div></div>`;
     return;
   }
   const w = deck[idx], s = stateOf(w);
   area.innerHTML = `
-    <div class="stage">${duck("wow")}<div class="card ${flipped ? "flipped" : ""}${w.note ? " has-note" : ""}" id="card" tabindex="0" aria-label="Thẻ từ, bấm để lật">
+    <div class="stage">${duck(PEEK[idx % PEEK.length], idx % 3 ? "plain" : "wow")}<div class="card ${flipped ? "flipped" : ""}${w.note ? " has-note" : ""}" id="card" tabindex="0" aria-label="Thẻ từ, bấm để lật">
       <div class="face front">
         <div class="meta"><span>${esc(w.topic)}</span><span class="box-pill">${s.seen ? "Hộp " + s.box + "/5" : "Từ mới"}</span></div>
         <div class="fc-main"><div class="fc-text"><div class="word">${esc(w.w)}</div>
@@ -8052,7 +8132,7 @@ function renderQuizSetup() {
   const nKnown = wordsFor(topic).length - pool.length;
   const area = document.getElementById("quizArea");
   area.innerHTML = `<div class="panel">
-    <p class="label" style="margin:0">Bài kiểm tra</p>
+    ${pHead("Bài kiểm tra", "exam")}
     <div class="grid2">
       <label class="field">Kiểu câu hỏi
         <select id="q-dir">
@@ -8103,7 +8183,7 @@ function renderQuestion() {
     : `<p class="label" style="margin:0">Từ này nghĩa là gì?</p><p class="q-prompt">${esc(w.w)}</p><div class="row"><span class="ipa">${esc(w.ipa || "")}</span>${posTag}<button class="speak" data-speak="${esc(w.w)}">🔊 Nghe</button></div>${ctxHtml(w)}`;
   area.innerHTML = `<div class="panel">
     <div class="row spread"><span class="counter">Câu ${quiz.i + 1} / ${quiz.qs.length}</span><span class="counter">Đúng: ${quiz.score}</span></div>
-    <div class="bar"><i style="width:${(quiz.i / quiz.qs.length) * 100}%"></i></div>
+    ${duckBar(quiz.i / quiz.qs.length)}
     ${prompt}
     ${typing ? `<form class="typebox" id="typeForm" autocomplete="off"><input type="text" id="q-type" placeholder="Gõ từ tiếng Anh rồi bấm Enter" autocapitalize="off" autocorrect="off" spellcheck="false"><button class="btn primary" type="submit">Kiểm tra</button></form>
     <div class="row"><button class="btn ghost" type="button" id="q-hint">Gợi ý thêm 1 chữ</button><button class="btn ghost" type="button" id="q-skip">Không biết</button></div>` : `<div class="options">${options.map((o, k) => `<button class="opt" data-opt="${k}"><b>${"ABCD"[k]}</b><span>${showEn ? `${esc(o.w)} <span class="ipa opt-ipa">${esc(o.ipa || "")}</span>` : esc(o.vi)}</span></button>`).join("")}</div>`}
@@ -8131,8 +8211,8 @@ function showResult(w, ok, typed) {
   grade(w, ok);
   const yours = typed !== undefined && !ok ? (typed.trim() ? `Bạn gõ: <s>${esc(typed.trim())}</s>. ` : "") : "";
   document.getElementById("fb").innerHTML = ok
-    ? `<span class="yay">${duck("happy")}<span><b style="color:var(--good)">Quạc quạc, chính xác!</b><br><b>${esc(w.w)}</b> <span class="ipa">${esc(w.ipa || "")}</span> = ${picHtml(w, "pic-xs")} ${esc(w.vi)}${w.forms ? ` · quá khứ: ${esc(w.forms)}` : ""}${noteHtml(w, quizDir !== "en-vi")}</span></span>`
-    : `<span class="yay">${duck("sad")}<span>${yours}Đáp án đúng: <b>${esc(w.w)}</b> <span class="ipa">${esc(w.ipa || "")}</span> nghĩa là “${picHtml(w, "pic-xs")} ${esc(w.vi)}”.${w.forms ? ` Quá khứ: ${esc(w.forms)}.` : ""}${noteHtml(w, quizDir !== "en-vi")}</span></span>`;
+    ? `<span class="yay">${duck(YAY[quiz.score % YAY.length], "happy")}<span><b style="color:var(--good)">Quạc quạc, chính xác!</b><br><b>${esc(w.w)}</b> <span class="ipa">${esc(w.ipa || "")}</span> = ${picHtml(w, "pic-xs")} ${esc(w.vi)}${w.forms ? ` · quá khứ: ${esc(w.forms)}` : ""}${noteHtml(w, quizDir !== "en-vi")}</span></span>`
+    : `<span class="yay">${duck("flop")}<span>${yours}Đáp án đúng: <b>${esc(w.w)}</b> <span class="ipa">${esc(w.ipa || "")}</span> nghĩa là “${picHtml(w, "pic-xs")} ${esc(w.vi)}”.${w.forms ? ` Quá khứ: ${esc(w.forms)}.` : ""}${noteHtml(w, quizDir !== "en-vi")}</span></span>`;
   document.getElementById("fb").insertAdjacentHTML("beforeend", reportBtn(w));
   if (quizDir !== "en-vi") speak(w.w);
   const n = document.getElementById("q-next"); n.hidden = false; n.focus();
@@ -8167,7 +8247,7 @@ function renderQuizResult() {
   const msg = pct === 100 ? "Tuyệt vời, đúng hết!" : pct >= 70 ? "Làm tốt lắm." : "Ôn thêm bằng flashcard rồi thử lại nhé.";
   document.getElementById("quizArea").innerHTML = `<div class="panel">
     <p class="label" style="margin:0">Kết quả</p>
-    <div class="result-duck">${duck(pct >= 70 ? "happy" : "sad")}</div><div class="row"><span class="score">${quiz.score}/${quiz.qs.length}</span><span>${msg}</span></div>
+    <div class="result-duck">${duck(pct >= 70 ? "party" : "flop")}</div><div class="row"><span class="score">${quiz.score}/${quiz.qs.length}</span><span>${msg}</span></div>
     ${quiz.wrong.length ? `<div><p class="label">Từ cần ôn lại</p><ul class="review">${quiz.wrong.map(w => `<li><b>${esc(w.w)}</b><span class="ipa">${esc(w.ipa || "")}</span><span>${esc(w.vi)}</span></li>`).join("")}</ul></div>` : ""}
     <div class="row"><button class="btn primary" id="q-start">Làm bài mới</button><button class="btn" id="q-setup">Đổi kiểu câu hỏi</button></div>
   </div>`;
@@ -8196,8 +8276,8 @@ function renderReviewSetup() {
   const n = { due: rvPool("due").length, topic: rvPool("topic").length, all: rvPool("all").length };
   if (!n[rvSrc]) rvSrc = n.due ? "due" : n.topic ? "topic" : "all";
   document.getElementById("reviewArea").innerHTML = `<div class="panel">
-    <p class="label" style="margin:0">Ôn tập từ đã học</p>
-    ${n.all ? "" : `<div class="empty">${duck("sleepy")}Bạn chưa học từ nào. Hãy học vài thẻ ở tab “Thẻ từ” trước, rồi quay lại đây ôn nhé.</div>`}
+    ${pHead("Ôn tập từ đã học", "float")}
+    ${n.all ? "" : `<div class="empty">${duck("stack", "sleepy")}Bạn chưa học từ nào. Hãy học vài thẻ ở tab “Thẻ từ” trước, rồi quay lại đây ôn nhé.</div>`}
     <div class="grid2">
       <label class="field">Ôn những từ nào
         <select id="rv-src">
@@ -8246,7 +8326,7 @@ function renderReview() {
   rv.answered = false; rv.flipped = false;
   const waiting = rvWaiting();
   const head = `<div class="row spread"><span class="counter">Đã nhớ ${rv.done.size} / ${rv.total} từ${waiting ? ` · ${waiting} từ chờ hỏi lại` : ""}</span><span class="box-pill">${RV_TYPES[item.type]}</span></div>
-    <div class="bar"><i style="width:${rv.done.size / rv.total * 100}%"></i></div>`;
+    ${duckBar(rv.done.size / rv.total)}`;
   const tail = `<div class="feedback" id="rv-fb"></div>
     <div class="row spread"><button class="btn primary" id="rv-next" hidden>Tiếp →</button><button class="btn ghost" id="rv-end">Kết thúc</button></div>`;
   const posTag = `<span class="pos" style="margin-left:0">${POS_VI[w.pos] || esc(w.pos)}</span>`;
@@ -8299,8 +8379,8 @@ function rvAnswer(ok, typed) {
   if (item.options) document.querySelectorAll(".opt").forEach((b, j) => { if (item.options[j].w === w.w) b.classList.add("right"); });
   const yours = typed && typed.trim() && !ok ? `Bạn gõ: <s>${esc(typed.trim())}</s>. ` : "";
   document.getElementById("rv-fb").innerHTML = ok
-    ? `<span class="yay">${duck("happy")}<span><b style="color:var(--good)">Quạc quạc, nhớ rồi!</b><br><b>${esc(w.w)}</b> <span class="ipa">${esc(w.ipa || "")}</span> = ${picHtml(w, "pic-xs")} ${esc(w.vi)}${w.forms ? ` · quá khứ: ${esc(w.forms)}` : ""}${noteHtml(w, item.type !== "envi" && item.type !== "card")}<span class="row" id="rv-undo-row" style="margin-top:8px"><button class="btn bad" type="button" id="rv-undo">Vẫn chưa nhớ, hỏi lại sau</button></span></span></span>`
-    : `<span class="yay">${duck("sad")}<span>${yours}<b>${esc(w.w)}</b> <span class="ipa">${esc(w.ipa || "")}</span> nghĩa là “${picHtml(w, "pic-xs")} ${esc(w.vi)}”.${w.forms ? ` Quá khứ: ${esc(w.forms)}.` : ""}${noteHtml(w, item.type !== "envi" && item.type !== "card")}<span class="counter">Từ này sẽ được hỏi lại sau vài câu.</span></span></span>`;
+    ? `<span class="yay">${duck(YAY[rv.done.size % YAY.length], "happy")}<span><b style="color:var(--good)">Quạc quạc, nhớ rồi!</b><br><b>${esc(w.w)}</b> <span class="ipa">${esc(w.ipa || "")}</span> = ${picHtml(w, "pic-xs")} ${esc(w.vi)}${w.forms ? ` · quá khứ: ${esc(w.forms)}` : ""}${noteHtml(w, item.type !== "envi" && item.type !== "card")}<span class="row" id="rv-undo-row" style="margin-top:8px"><button class="btn bad" type="button" id="rv-undo">Vẫn chưa nhớ, hỏi lại sau</button></span></span></span>`
+    : `<span class="yay">${duck("flop")}<span>${yours}<b>${esc(w.w)}</b> <span class="ipa">${esc(w.ipa || "")}</span> nghĩa là “${picHtml(w, "pic-xs")} ${esc(w.vi)}”.${w.forms ? ` Quá khứ: ${esc(w.forms)}.` : ""}${noteHtml(w, item.type !== "envi" && item.type !== "card")}<span class="counter">Từ này sẽ được hỏi lại sau vài câu.</span></span></span>`;
   document.getElementById("rv-fb").insertAdjacentHTML("beforeend", reportBtn(w));
   if (item.type !== "envi") speak(w.w);
   const n = document.getElementById("rv-next"); n.hidden = false; n.focus();
@@ -8341,7 +8421,7 @@ function renderReviewResult() {
   const pct = Math.round(rv.firstOk / rv.total * 100);
   document.getElementById("reviewArea").innerHTML = `<div class="panel">
     <p class="label" style="margin:0">Xong lượt ôn</p>
-    <div class="result-duck">${duck(pct >= 70 ? "happy" : "sad")}</div>
+    <div class="result-duck">${duck(pct >= 70 ? "party" : "float", pct >= 70 ? "happy" : "plain")}</div>
     <div class="row"><span class="score">${rv.firstOk}/${rv.total}</span><span>từ nhớ ngay từ lần hỏi đầu.</span></div>
     ${missed.length ? `<div><p class="label">Từ đã sai trong lượt này (sẽ được ưu tiên ôn lần sau)</p><ul class="review">${missed.map(w => `<li><b>${esc(w.w)}</b><span class="ipa">${esc(w.ipa || "")}</span><span>${esc(w.vi)}</span></li>`).join("")}</ul></div>` : ""}
     <div class="row">${missed.length ? `<button class="btn primary" id="rv-again-missed">Ôn lại ${missed.length} từ đã sai</button>` : ""}<button class="btn ${missed.length ? "" : "primary"}" id="rv-new">Lượt ôn mới</button></div>
@@ -8365,6 +8445,7 @@ function renderProgress() {
     return head + `<div class="topic-row"><span>${esc(t.name)}</span><div class="stack">${counts.map((c, i) => c ? `<i style="width:${c / t.words.length * 100}%;background:${BOX_COLORS[i]}" title="Hộp ${i}: ${c} từ"></i>` : "").join("")}</div><span class="tabular">${m}/${t.words.length}</span></div>`;
   }).join("");
   document.getElementById("progressArea").innerHTML = `
+    ${pHead("Tiến độ của bạn", "skate")}
     <div class="grid2">
       <div><p class="label">Đã học</p><span class="score">${seen}</span> <span class="tabular">/ ${words.length} từ</span></div>
       <div><p class="label">Đã thuộc (hộp ${MASTERED_BOX}+ hoặc “đã biết”)</p><span class="score">${mastered}</span></div>
@@ -8541,7 +8622,7 @@ function renderReports() {
       ${g.map(r => `<div class="rp-head" style="padding-left:10px">${rpTags(r)}<span class="counter">${fmtTime(r.at)}</span><button class="mini" data-rp-fix="${esc(r.id)}">${rpFixed[r.id] ? "↺ Chưa sửa" : "✓ Đã sửa"}</button></div>${r.note ? `<p class="rp-note">${esc(r.note)}</p>` : ""}`).join("")}
     </div>`; }).join("") || `<p class="counter">Không còn báo lỗi nào cần sửa.</p>`}</div>` : ""}
     </div></details>`;
-  el.innerHTML = `<p class="label" style="margin:0">Báo lỗi từ vựng</p>
+  el.innerHTML = `${pHead("Báo lỗi từ vựng", "honk", "angry")}
     <p style="margin:0">Thấy hình minh họa xấu hoặc sai, nghĩa chưa đúng, từ khó hiểu hay chưa rõ cách dùng? Bấm <b>⚑ Báo lỗi</b> trên thẻ từ, trong tab Danh sách, hoặc sau khi trả lời câu hỏi ở Ôn tập, Kiểm tra.</p>
     <div class="row spread"><p class="label" style="margin:0">Báo lỗi của bạn (${reports.length})</p>${reports.length ? `<span class="row"><button class="btn" id="rp-export">Tải file báo lỗi</button><button class="btn ghost" id="rp-copy">Sao chép</button>${REPORT_URL && unsent ? `<button class="btn ghost" id="rp-resend">Gửi lại ${unsent} báo lỗi</button>` : ""}</span>` : ""}</div>
     ${!REPORT_URL && reports.length ? `<p class="counter" style="margin:0">Báo lỗi đang lưu trên máy này. Bấm “Tải file báo lỗi” (hoặc “Sao chép”) rồi gửi cho chủ web.</p>` : ""}
