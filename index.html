@@ -8153,6 +8153,10 @@ function renderCard() {
       <button class="btn ghost" id="next">Bỏ qua →</button>
     </div>`;
 }
+// nút "đã biết" dùng chung cho Ôn tập và Kiểm tra
+const KNOW_TIP = "Từ không xuất hiện ở Thẻ từ, Ôn tập, Kiểm tra nữa và được tính là đã thuộc. Học lại được ở tab Tiến độ.";
+const knowBtn = (id, kbd) => `<button class="btn ghost" type="button" id="${id}" title="${KNOW_TIP}">✓ Từ này mình biết rồi${kbd ? ` <span class="kbd">${kbd}</span>` : ""}</button>`;
+const knownNote = (w, undoId) => `<div class="notice" id="${undoId}-note" style="margin-top:8px"><span>Đã đánh dấu “${esc(w.w)}” là từ đã biết, sẽ không hỏi lại nữa.${undoId ? "" : " Muốn học lại, vào tab <b>Tiến độ</b>, phần “Từ đã thuộc”."}</span>${undoId ? `<button class="btn" type="button" id="${undoId}">Hoàn tác</button>` : ""}</div>`;
 function knowCard() {
   if (idx >= deck.length) return;
   const w = deck[idx], k = keyOf(w);
@@ -8249,11 +8253,13 @@ function renderQuestion() {
     ? `<p class="label" style="margin:0">Từ tiếng Anh nào có nghĩa là</p><p class="q-prompt">${esc(w.vi)}</p><div>${posTag}</div>`
     : `<p class="label" style="margin:0">Từ này nghĩa là gì?</p><p class="q-prompt">${esc(w.w)}</p><div class="row"><span class="ipa">${esc(w.ipa || "")}</span>${posTag}<button class="speak" data-speak="${esc(w.w)}">🔊 Nghe</button></div>${ctxHtml(w)}`;
   area.innerHTML = `<div class="panel">
+    ${quiz.knownUndo && !quiz.knownUndo.answered ? knownNote(quiz.knownUndo.w, "q-known-undo") : ""}
     <div class="row spread"><span class="counter">Câu ${quiz.i + 1} / ${quiz.qs.length}</span><span class="counter">Đúng: ${quiz.score}</span></div>
     ${duckBar(quiz.i / quiz.qs.length)}
     ${prompt}
     ${typing ? `<form class="typebox" id="typeForm" autocomplete="off"><input type="text" id="q-type" placeholder="Gõ từ tiếng Anh rồi bấm Enter" autocapitalize="off" autocorrect="off" spellcheck="false"><button class="btn primary" type="submit">Kiểm tra</button></form>
-    <div class="row"><button class="btn ghost" type="button" id="q-hint">Gợi ý thêm 1 chữ</button><button class="btn ghost" type="button" id="q-skip">Không biết</button></div>` : `<div class="options">${options.map((o, k) => `<button class="opt" data-opt="${k}"><b>${"ABCD"[k]}</b><span>${showEn ? `${esc(o.w)} <span class="ipa opt-ipa">${esc(o.ipa || "")}</span>` : esc(o.vi)}</span></button>`).join("")}</div>`}
+    <div class="row"><button class="btn ghost" type="button" id="q-hint">Gợi ý thêm 1 chữ</button><button class="btn ghost" type="button" id="q-skip">Không biết</button>${knowBtn("q-know")}</div>` : `<div class="options">${options.map((o, k) => `<button class="opt" data-opt="${k}"><b>${"ABCD"[k]}</b><span>${showEn ? `${esc(o.w)} <span class="ipa opt-ipa">${esc(o.ipa || "")}</span>` : esc(o.vi)}</span></button>`).join("")}</div>
+    <div class="row">${knowBtn("q-know")}</div>`}
     <div class="feedback" id="fb">${typing ? "Không phân biệt chữ hoa, chữ thường." : "Chọn đáp án, hoặc bấm phím 1 đến 4."}</div>
     <div class="row spread"><button class="btn primary" id="q-next" hidden>Câu tiếp →</button><button class="btn ghost" id="q-end">Kết thúc</button></div>
   </div>`;
@@ -8274,6 +8280,7 @@ function checkTyped(skip) {
 }
 function showResult(w, ok, typed) {
   quiz.answered = true;
+  quiz.knownUndo = null; document.getElementById("q-known-undo-note")?.remove();
   if (ok) quiz.score++; else quiz.wrong.push(w);
   const early = grade(w, ok);
   const yours = typed !== undefined && !ok ? (typed.trim() ? `Bạn gõ: <s>${esc(typed.trim())}</s>. ` : "") : "";
@@ -8284,6 +8291,36 @@ function showResult(w, ok, typed) {
   document.getElementById("fb").insertAdjacentHTML("beforeend", reportBtn(w));
   if (quizDir !== "en-vi") speak(w.w);
   const n = document.getElementById("q-next"); n.hidden = false; n.focus();
+}
+// Kiểm tra: bấm "đã biết". Chưa trả lời thì bỏ câu này, sang câu sau (không tính điểm).
+// Đã trả lời rồi thì giữ điểm, chỉ bỏ từ khỏi danh sách "cần ôn lại". Có Hoàn tác.
+function quizKnow() {
+  if (!quiz || quiz.i >= quiz.qs.length) return;
+  const { w } = quiz.qs[quiz.i], k = keyOf(w);
+  if (isKnown(w)) return;
+  const answered = quiz.answered;
+  quiz.knownUndo = { w, prev: progress[k], qs: quiz.qs.slice(), wrong: quiz.wrong.slice(), answered };
+  markKnown(w);
+  quiz.wrong = quiz.wrong.filter(x => keyOf(x) !== k);
+  if (answered) {
+    document.getElementById("q-know").disabled = true;
+    document.getElementById("fb").insertAdjacentHTML("beforeend", knownNote(w, "q-known-undo"));
+    return;
+  }
+  quiz.qs.splice(quiz.i, 1);
+  if (!quiz.qs.length) { quiz = null; renderQuizSetup(); return toast(`Đã đánh dấu “${w.w}” là đã biết.`); }
+  renderQuestion();
+}
+function quizKnowUndo() {
+  const L = quiz && quiz.knownUndo;
+  if (!L) return;
+  const k = keyOf(L.w);
+  if (L.prev) progress[k] = L.prev; else delete progress[k];
+  store.set("progress", progress); renderDue();
+  quiz.wrong = L.wrong; quiz.knownUndo = null;
+  if (!L.answered) { quiz.qs = L.qs; return renderQuestion(); }
+  document.getElementById("q-known-undo-note")?.remove();
+  document.getElementById("q-know").disabled = false;
 }
 function giveHint() {
   if (!quiz || quiz.answered) return;
@@ -8311,9 +8348,11 @@ function endQuiz() {
   renderQuizResult();
 }
 function renderQuizResult() {
+  const kn = quiz.knownUndo && !quiz.knownUndo.answered ? quiz.knownUndo.w : null;
   const pct = Math.round(quiz.score / quiz.qs.length * 100);
   const msg = pct === 100 ? "Tuyệt vời, đúng hết!" : pct >= 70 ? "Làm tốt lắm." : "Ôn thêm bằng flashcard rồi thử lại nhé.";
   document.getElementById("quizArea").innerHTML = `<div class="panel">
+    ${kn ? knownNote(kn) : ""}
     <p class="label" style="margin:0">Kết quả</p>
     <div class="result-duck">${duck(pct >= 70 ? "party" : "flop")}</div><div class="row"><span class="score">${quiz.score}/${quiz.qs.length}</span><span>${msg}</span></div>
     ${quiz.wrong.length ? `<div><p class="label">Từ cần ôn lại</p><ul class="review">${quiz.wrong.map(w => `<li><b>${esc(w.w)}</b><span class="ipa">${esc(w.ipa || "")}</span><span>${esc(w.vi)}</span></li>`).join("")}</ul></div>` : ""}
@@ -8357,7 +8396,7 @@ function renderReviewSetup() {
         <select id="rv-len"><option value="10">10</option><option value="20">20</option><option value="50">50</option><option value="0">Tất cả</option></select></label>
     </div>
     <div><p class="label">Trộn các kiểu hỏi</p><div class="chips">${Object.entries(RV_TYPES).map(([k, v]) => `<label class="chip"><input type="checkbox" class="rv-type" value="${k}" ${rvTypes.includes(k) ? "checked" : ""}> ${v}</label>`).join("")}</div></div>
-    <p class="counter" style="margin:0">Mỗi câu đều có nút “Chưa nhớ”. Từ sai hoặc chưa nhớ sẽ được hỏi lại sau vài câu bằng kiểu khác, và được ưu tiên ôn trước ở lần sau.</p>
+    <p class="counter" style="margin:0">Mỗi câu đều có nút “Chưa nhớ”. Từ sai hoặc chưa nhớ sẽ được hỏi lại sau vài câu bằng kiểu khác, và được ưu tiên ôn trước ở lần sau. Từ nào quá dễ thì bấm “✓ Từ này mình biết rồi”: từ đó sẽ không vào Ôn tập, Kiểm tra nữa (học lại được ở tab Tiến độ).</p>
     <div class="row"><button class="btn primary" id="rv-start" ${n.all ? "" : "disabled"}>Bắt đầu ôn</button></div>
   </div>`;
   document.getElementById("rv-src").value = rvSrc;
@@ -8393,7 +8432,7 @@ function renderReview() {
   const item = rv.q[rv.i], w = item.w;
   rv.answered = false; rv.flipped = false;
   const waiting = rvWaiting();
-  const head = `<div class="row spread"><span class="counter">Đã nhớ ${rv.done.size} / ${rv.total} từ${waiting ? ` · ${waiting} từ chờ hỏi lại` : ""}</span><span class="box-pill">${RV_TYPES[item.type]}</span></div>
+  const head = `${rv.knownUndo && !rv.knownUndo.answered ? knownNote(rv.knownUndo.w, "rv-known-undo") : ""}<div class="row spread"><span class="counter">Đã nhớ ${rv.done.size} / ${rv.total} từ${waiting ? ` · ${waiting} từ chờ hỏi lại` : ""}</span><span class="box-pill">${RV_TYPES[item.type]}</span></div>
     ${duckBar(rv.done.size / rv.total)}`;
   const tail = `<div class="feedback" id="rv-fb"></div>
     <div class="row spread"><button class="btn primary" id="rv-next" hidden>Tiếp →</button><button class="btn ghost" id="rv-end">Kết thúc</button></div>`;
@@ -8407,11 +8446,12 @@ function renderReview() {
         <div id="rv-back" hidden><div class="fc-main" style="margin-top:8px"><p class="vi" style="margin:0">${esc(w.vi)}</p>${picHtml(w, "pic pic-rv")}</div>${w.forms ? `<p class="forms">Quá khứ: <b>${esc(w.forms)}</b></p>` : ""}${w.note ? `<p class="note"><b>Cách dùng:</b> ${esc(w.note)}</p>` : ""}</div>
         <p class="hint" id="rv-flip-hint">Nghĩ ra nghĩa trong đầu, rồi bấm vào thẻ để lật xem đáp án</p>
       </div>
-      <div class="row"><button class="btn bad grow" data-rv-grade="0">Chưa nhớ <span class="kbd">1</span></button><button class="btn good grow" data-rv-grade="1">Nhớ rồi <span class="kbd">2</span></button></div>`;
+      <div class="row"><button class="btn bad grow" data-rv-grade="0">Chưa nhớ <span class="kbd">1</span></button><button class="btn good grow" data-rv-grade="1">Nhớ rồi <span class="kbd">2</span></button></div>
+      <div class="row">${knowBtn("rv-know", "3")}</div>`;
   } else if (item.type === "type") {
     body = `<p class="label" style="margin:0">Gõ từ tiếng Anh có nghĩa là</p><p class="q-prompt">${esc(w.vi)}</p><div>${posTag}</div>
       <form class="typebox" id="rvTypeForm" autocomplete="off"><input type="text" id="rv-type" placeholder="Gõ từ tiếng Anh rồi bấm Enter" autocapitalize="off" autocorrect="off" spellcheck="false"><button class="btn primary" type="submit">Kiểm tra</button></form>
-      <div class="row"><button class="btn bad" type="button" id="rv-skip">Chưa nhớ</button></div>`;
+      <div class="row"><button class="btn bad" type="button" id="rv-skip">Chưa nhớ</button>${knowBtn("rv-know")}</div>`;
   } else {
     const en = item.type === "envi";
     item.options = item.options || rvOptions(w);
@@ -8419,7 +8459,7 @@ function renderReview() {
       ? `<p class="label" style="margin:0">Từ này nghĩa là gì?</p><p class="q-prompt">${esc(w.w)}</p><div class="row"><span class="ipa">${esc(w.ipa || "")}</span>${posTag}<button class="speak" data-speak="${esc(w.w)}">🔊 Nghe</button></div>${ctxHtml(w)}`
       : `<p class="label" style="margin:0">Từ tiếng Anh nào có nghĩa là</p><p class="q-prompt">${esc(w.vi)}</p><div>${posTag}</div>`)
       + `<div class="options">${item.options.map((o, k) => `<button class="opt" data-rv-opt="${k}"><b>${"ABCD"[k]}</b><span>${en ? esc(o.vi) : `${esc(o.w)} <span class="ipa opt-ipa">${esc(o.ipa || "")}</span>`}</span></button>`).join("")}</div>
-      <div class="row"><button class="btn bad" type="button" id="rv-skip">Chưa nhớ</button></div>`;
+      <div class="row"><button class="btn bad" type="button" id="rv-skip">Chưa nhớ</button>${knowBtn("rv-know")}</div>`;
   }
   area.innerHTML = `<div class="panel">${head}${body}${tail}</div>`;
   const inp = document.getElementById("rv-type"); if (inp) inp.focus();
@@ -8433,6 +8473,7 @@ function rvFlip() {
 function rvAnswer(ok, typed) {
   if (!rv || rv.answered) return;
   rv.answered = true;
+  rv.knownUndo = null; document.getElementById("rv-known-undo-note")?.remove();
   const item = rv.q[rv.i], w = item.w, k = keyOf(w);
   const early = grade(w, ok);
   rv.undo = null;
@@ -8468,6 +8509,36 @@ function rvUndo() {
   if (row) row.innerHTML = `<span class="counter">Đã đưa vào danh sách ôn lại. Từ này sẽ được hỏi lại sau vài câu.</span>`;
   document.getElementById("rv-next").focus();
 }
+// Ôn tập: bấm "đã biết". Từ được tính là đã nhớ, không hỏi lại trong lượt này và không vào lịch ôn nữa.
+// Chưa trả lời thì sang câu sau luôn; đã trả lời thì giữ phần đáp án. Có Hoàn tác.
+function rvKnow() {
+  if (!rv || rv.i >= rv.q.length) return;
+  const w = rv.q[rv.i].w, k = keyOf(w);
+  if (isKnown(w)) return;
+  const answered = rv.answered;
+  rv.knownUndo = { w, prev: progress[k], q: rv.q.slice(), missed: new Map(rv.missed), done: new Set(rv.done), firstOk: rv.firstOk, undo: rv.undo, answered };
+  markKnown(w);
+  rv.q = rv.q.filter((x, j) => (answered ? j <= rv.i : j < rv.i) || keyOf(x.w) !== k);
+  if (!rv.done.has(k)) { if (!rv.missed.has(k)) rv.firstOk++; rv.done.add(k); }
+  rv.missed.delete(k);
+  rv.undo = null;
+  if (!answered) return renderReview();
+  const row = document.getElementById("rv-undo-row"); if (row) row.hidden = true;
+  document.getElementById("rv-know").disabled = true;
+  document.getElementById("rv-fb").insertAdjacentHTML("beforeend", knownNote(w, "rv-known-undo"));
+}
+function rvKnowUndo() {
+  const L = rv && rv.knownUndo;
+  if (!L) return;
+  const k = keyOf(L.w);
+  if (L.prev) progress[k] = L.prev; else delete progress[k];
+  store.set("progress", progress); renderDue();
+  rv.q = L.q; rv.missed = L.missed; rv.done = L.done; rv.firstOk = L.firstOk; rv.undo = L.undo; rv.knownUndo = null;
+  if (!L.answered) return renderReview();
+  document.getElementById("rv-known-undo-note")?.remove();
+  const row = document.getElementById("rv-undo-row"); if (row) row.hidden = false;
+  document.getElementById("rv-know").disabled = false;
+}
 function rvOpt(k) {
   if (!rv || rv.answered) return;
   const item = rv.q[rv.i], ok = item.options[k].w === item.w.w;
@@ -8486,9 +8557,12 @@ function rvEnd() {
   renderReviewResult();
 }
 function renderReviewResult() {
+  const kn = rv.knownUndo && !rv.knownUndo.answered ? rv.knownUndo.w : null;
+  rv.knownUndo = null;
   const missed = [...rv.missed.values()];
   const pct = Math.round(rv.firstOk / rv.total * 100);
   document.getElementById("reviewArea").innerHTML = `<div class="panel">
+    ${kn ? knownNote(kn) : ""}
     <p class="label" style="margin:0">Xong lượt ôn</p>
     <div class="result-duck">${duck(pct >= 70 ? "party" : "float", pct >= 70 ? "happy" : "plain")}</div>
     <div class="row"><span class="score">${rv.firstOk}/${rv.total}</span><span>từ nhớ ngay từ lần hỏi đầu.</span></div>
@@ -8757,13 +8831,17 @@ document.addEventListener("click", (e) => {
   if (t.dataset.rvOpt) return rvOpt(+t.dataset.rvOpt);
   if (t.id === "rv-skip") return rvAnswer(false);
   if (t.id === "rv-undo") return rvUndo();
-  if (t.id === "rv-next") { rv.i++; return renderReview(); }
+  if (t.id === "rv-know") return rvKnow();
+  if (t.id === "rv-known-undo") return rvKnowUndo();
+  if (t.id === "q-know") return quizKnow();
+  if (t.id === "q-known-undo") return quizKnowUndo();
+  if (t.id === "rv-next") { rv.knownUndo = null; rv.i++; return renderReview(); }
   if (t.id === "rv-end") return rvEnd();
   if (t.id === "rv-again-missed") { const l = rv.missedList; rv = null; return startReview(l); }
   if (t.id === "rv-new") { rv = null; document.getElementById("topicBar").hidden = false; return renderReviewSetup(); }
   if (t.id === "q-hint") return giveHint();
   if (t.id === "q-skip") return checkTyped(true);
-  if (t.id === "q-next") { quiz.i++; return renderQuestion(); }
+  if (t.id === "q-next") { quiz.knownUndo = null; quiz.i++; return renderQuestion(); }
   if (t.id === "reset") {
     document.getElementById("resetRow").innerHTML = `<span>Xóa toàn bộ tiến độ? Từ bạn tự thêm vẫn được giữ.</span><button class="btn bad" id="reset-yes">Xóa</button><button class="btn ghost" id="reset-no">Hủy</button>`;
     return;
@@ -8784,8 +8862,8 @@ document.addEventListener("submit", (e) => {
   if (e.target.id === "rpLoadForm") { e.preventDefault(); loadFromSheet(); }
 });
 document.getElementById("reportModal").addEventListener("click", (e) => { if (e.target.id === "reportModal") closeReport(); });
-document.addEventListener("submit", (e) => { if (e.target.id === "rvTypeForm") { e.preventDefault(); if (rv && rv.answered) { rv.i++; renderReview(); } else if (rv) rvTyped(); } });
-document.addEventListener("submit", (e) => { if (e.target.id === "typeForm") { e.preventDefault(); if (quiz && quiz.answered) { quiz.i++; renderQuestion(); } else checkTyped(false); } });
+document.addEventListener("submit", (e) => { if (e.target.id === "rvTypeForm") { e.preventDefault(); if (rv && rv.answered) { rv.knownUndo = null; rv.i++; renderReview(); } else if (rv) rvTyped(); } });
+document.addEventListener("submit", (e) => { if (e.target.id === "typeForm") { e.preventDefault(); if (quiz && quiz.answered) { quiz.knownUndo = null; quiz.i++; renderQuestion(); } else checkTyped(false); } });
 document.getElementById("topicSel").addEventListener("change", (e) => {
   // chuyển sang chọn nhiều: giữ sẵn chủ đề đang học (nếu là một chủ đề lẻ) làm lựa chọn đầu tiên
   if (e.target.value === "multi" && !picks.length && allTopics().some(t => t.id === topic)) { picks = [topic]; store.set("picks", picks); }
@@ -8813,6 +8891,7 @@ document.addEventListener("keydown", (e) => {
     else if (e.key === "ArrowLeft" && idx > 0) { idx--; flipped = false; renderCard(); }
   } else if (tab === "review" && rv && rv.i < rv.q.length) {
     const type = rv.q[rv.i].type;
+    if (type === "card" && e.key === "3") return rvKnow();
     if (type === "card" && !rv.answered) { if (e.key === " ") { e.preventDefault(); rvFlip(); } else if (e.key === "1") { rvFlip(); rvAnswer(false); } else if (e.key === "2") { rvFlip(); rvAnswer(true); } }
     else if ((type === "envi" || type === "vien") && !rv.answered && /^[1-4]$/.test(e.key)) rvOpt(+e.key - 1);
   } else if (tab === "quiz" && quiz) {
