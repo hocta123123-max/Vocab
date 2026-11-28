@@ -156,6 +156,9 @@ img.pic-sm.photo, img.pic-xs.photo { object-fit: cover; border-radius: 6px; filt
 .meta { display: flex; justify-content: space-between; align-items: center; font-size: 0.8rem; color: var(--muted); gap: 8px; }
 .word { font-family: var(--font-display); font-weight: 800; font-size: clamp(2rem, 8vw, 3.2rem); line-height: 1.1; margin: auto 0 0; overflow-wrap: anywhere; text-wrap: balance; }
 .ipa { font-family: var(--font-mono); color: var(--muted); font-size: 1rem; }
+.ipa .acc { font-family: var(--font-body); font-size: 0.62em; font-weight: 700; letter-spacing: .04em; border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; margin-right: 3px; vertical-align: 0.15em; }
+.ipa .acc:not(:first-child) { margin-left: 4px; }
+.note.clue { background: var(--accent-soft); border-radius: 8px; padding: 6px 10px; margin: 6px 0 0; }
 .pos { display: inline-block; border: 1px solid var(--line); border-radius: 4px; padding: 0 6px; font-size: 0.75rem; margin-left: 6px; color: var(--muted); }
 .hint { margin-top: auto; color: var(--muted); font-size: 0.85rem; }
 .vi { font-family: var(--font-display); font-weight: 600; font-size: clamp(1.5rem, 6vw, 2.2rem); line-height: 1.2; margin-top: auto; }
@@ -349,7 +352,8 @@ ul.review li b { min-width: 0; }
       <form id="addForm" class="grid2">
         <label class="field">Từ / cụm từ tiếng Anh *<input type="text" id="f-w" required placeholder="vd: grab a bite"></label>
         <label class="field">Nghĩa tiếng Việt *<input type="text" id="f-vi" required placeholder="vd: ăn nhanh một chút"></label>
-        <label class="field">Phiên âm<input type="text" id="f-ipa" placeholder="/ɡræb ə baɪt/"></label>
+        <label class="field">Phiên âm Anh-Mỹ (US)<input type="text" id="f-ipa" placeholder="/ɡræb ə baɪt/"></label>
+        <label class="field">Phiên âm Anh-Anh (UK)<input type="text" id="f-uk" placeholder="/ɡræb ə baɪt/"></label>
         <label class="field">Loại từ
           <select id="f-pos"><option value="n">danh từ (n)</option><option value="v">động từ (v)</option><option value="adj">tính từ (adj)</option><option value="adv">trạng từ (adv)</option><option value="phr" selected>cụm từ (phr)</option></select>
         </label>
@@ -505,6 +509,13 @@ function X(text) {
   text.trim().split("\n").map(l => l.split("|").map(x => x.trim())).filter(p => p[0] && p[1])
     .forEach(([w, pos, ex, coll, note]) => { ENRICH[(w + "|" + pos).toLowerCase()] = { ex, coll, note }; });
 }
+/* Phiên âm Anh-Anh (src/ipauk.js): UK(`từ|phiên âm Anh-Mỹ|phiên âm Anh-Anh`) */
+const UKIPA = {};
+function UK(text) { text.trim().split("\n").forEach(l => { const [w, us, uk] = l.split("|").map(x => x.trim()); if (w && us && uk) UKIPA[w + "|" + us] = uk; }); }
+/* Tên khác (src/alt.js): A(`từ|loại từ|tên khác 1, tên khác 2|mã chủ đề nếu cần`) */
+const ALT = {};
+function A(text) { text.trim().split("\n").map(l => l.split("|").map(x => x.trim())).filter(p => p[0] && p[2])
+  .forEach(([w, pos, alts, tp]) => { ALT[(w + "|" + pos).toLowerCase() + (tp ? "@" + tp : "")] = alts.split(",").map(x => x.trim()).filter(Boolean); }); }
 // ĐỒ VẬT HẰNG NGÀY (phần 1): trong nhà
 // Mỗi dòng: từ | loại từ (n/v/adj) | nghĩa tiếng Việt | phiên âm
 T("kitchen", "Nhà bếp", "obj", `
@@ -4322,6 +4333,3463 @@ Object.assign(EMOJI, {
 "nudge|v":"👉","pace|v":"🚶","slump|v":"😩","sprawl|v":"🛌","straighten|v":"📏","fidget|v":"🫨","stammer|v":"😖","blurt|v":"😮","insist|v":"☝️","interrupt|v":"✋","repeat|v":"🔁","expect|v":"⏳","care|v":"💗","prefer|v":"👍","deserve|v":"🏅","owe|v":"💸","betray|v":"🗡️","deceive|v":"🎭","convince|v":"🤝","persuade|v":"🤝","avoid|v":"🚫","challenge|v":"🥊","insult|v":"🤬","abandon|v":"🏚️","impress|v":"🤩","separate|v":"↔️","emerge|v":"🐣","linger|v":"⏳","witness|v":"👀","dim|v":"🔅","dart|v":"🎯","hurl|v":"🤾","fling|v":"🤾","haul|v":"🚚","heave|v":"🏋️","trudge|v":"🥾","storm|v":"⛈️","bolt|v":"⚡","advance|v":"⏩","shuffle|v":"🃏",
 });
 
+/* Phiên âm Anh-Anh (UK). Phiên âm gốc trong các bộ từ là Anh-Mỹ (US), giọng đọc 🔊 cũng là Anh-Mỹ.
+   Mỗi dòng: từ | phiên âm Anh-Mỹ đang có | phiên âm Anh-Anh
+   Tạo tự động từ phiên âm Anh-Mỹ theo quy tắc (bỏ r cuối âm tiết, oʊ → əʊ...), đối chiếu từ điển Britfone (MIT) và Wiktionary/WikiPron (CC BY-SA)
+   để chọn đúng nguyên âm Anh-Anh (ɒ / ɑː / æ, thêm j trong new, student...); những từ không có trong từ điển đã được soát tay. */
+UK(`
+fridge|/frɪdʒ/|/frɪdʒ/
+freezer|/ˈfriːzər/|/ˈfriːzə/
+stove|/stoʊv/|/stəʊv/
+oven|/ˈʌvn/|/ˈʌvn/
+microwave|/ˈmaɪkrəweɪv/|/ˈmaɪkrəweɪv/
+rice cooker|/ˈraɪs ˌkʊkər/|/ˈraɪs ˌkʊkə/
+kettle|/ˈketl/|/ˈketl/
+toaster|/ˈtoʊstər/|/ˈtəʊstə/
+blender|/ˈblendər/|/ˈblendə/
+sink|/sɪŋk/|/sɪŋk/
+tap|/tæp/|/tæp/
+dishwasher|/ˈdɪʃwɑːʃər/|/ˈdɪʃwɒʃə/
+cupboard|/ˈkʌbərd/|/ˈkʌbəd/
+shelf|/ʃelf/|/ʃelf/
+counter|/ˈkaʊntər/|/ˈkaʊntə/
+pot|/pɑːt/|/pɒt/
+pan|/pæn/|/pæn/
+lid|/lɪd/|/lɪd/
+wok|/wɑːk/|/wɒk/
+kitchen knife|/ˈkɪtʃɪn naɪf/|/ˈkɪtʃɪn naɪf/
+cutting board|/ˈkʌtɪŋ bɔːrd/|/ˈkʌtɪŋ bɔːd/
+ladle|/ˈleɪdl/|/ˈleɪdl/
+spatula|/ˈspætʃələ/|/ˈspætʃələ/
+whisk|/wɪsk/|/wɪsk/
+peeler|/ˈpiːlər/|/ˈpiːlə/
+grater|/ˈɡreɪtər/|/ˈɡreɪtə/
+strainer|/ˈstreɪnər/|/ˈstreɪnə/
+tongs|/tɑːŋz/|/tɒŋz/
+can opener|/ˈkæn ˌoʊpənər/|/ˈkæn ˌəʊpənə/
+bottle opener|/ˈbɑːtl ˌoʊpənər/|/ˈbɒtl ˌəʊpənə/
+plate|/pleɪt/|/pleɪt/
+bowl|/boʊl/|/bəʊl/
+cup|/kʌp/|/kʌp/
+mug|/mʌɡ/|/mʌɡ/
+glass|/ɡlæs/|/ɡlɑːs/
+chopsticks|/ˈtʃɑːpstɪks/|/ˈtʃɒpstɪks/
+spoon|/spuːn/|/spuːn/
+fork|/fɔːrk/|/fɔːk/
+teapot|/ˈtiːpɑːt/|/ˈtiːpɒt/
+tray|/treɪ/|/treɪ/
+jar|/dʒɑːr/|/dʒɑː/
+apron|/ˈeɪprən/|/ˈeɪprən/
+oven mitt|/ˈʌvn mɪt/|/ˈʌvn mɪt/
+dish rack|/ˈdɪʃ ræk/|/ˈdɪʃ ræk/
+dish soap|/ˈdɪʃ soʊp/|/ˈdɪʃ səʊp/
+sponge|/spʌndʒ/|/spʌndʒ/
+plastic wrap|/ˈplæstɪk ræp/|/ˈplæstɪk ræp/
+aluminum foil|/əˈluːmɪnəm fɔɪl/|/əˈluːmɪnəm fɔɪl/
+rubbish bin|/ˈrʌbɪʃ bɪn/|/ˈrʌbɪʃ bɪn/
+gas cylinder|/ˈɡæs ˌsɪlɪndər/|/ˈɡæs ˌsɪlɪndə/
+sofa|/ˈsoʊfə/|/ˈsəʊfə/
+armchair|/ˈɑːrmtʃer/|/ˈɑːmtʃeə/
+cushion|/ˈkʊʃn/|/ˈkʊʃn/
+coffee table|/ˈkɔːfi ˌteɪbl/|/ˈkɒfi ˌteɪbl/
+rug|/rʌɡ/|/rʌɡ/
+carpet|/ˈkɑːrpɪt/|/ˈkɑːpɪt/
+curtain|/ˈkɜːrtn/|/ˈkɜːtn/
+blinds|/blaɪndz/|/blaɪndz/
+television|/ˈtelɪvɪʒn/|/ˈtelɪvɪʒn/
+remote control|/rɪˌmoʊt kənˈtroʊl/|/rɪˌməʊt kənˈtrəʊl/
+speaker|/ˈspiːkər/|/ˈspiːkə/
+lamp|/læmp/|/læmp/
+ceiling fan|/ˈsiːlɪŋ fæn/|/ˈsiːlɪŋ fæn/
+fan|/fæn/|/fæn/
+air conditioner|/ˈer kənˌdɪʃənər/|/ˈeə kənˌdɪʃənə/
+clock|/klɑːk/|/klɒk/
+vase|/veɪs/|/vɑːs/
+picture frame|/ˈpɪktʃər freɪm/|/ˈpɪktʃə freɪm/
+painting|/ˈpeɪntɪŋ/|/ˈpeɪntɪŋ/
+bookshelf|/ˈbʊkʃelf/|/ˈbʊkʃelf/
+plant pot|/ˈplænt pɑːt/|/ˈplɑːnt pɒt/
+houseplant|/ˈhaʊsplænt/|/ˈhaʊsplɑːnt/
+socket|/ˈsɑːkɪt/|/ˈsɒkɪt/
+plug|/plʌɡ/|/plʌɡ/
+switch|/swɪtʃ/|/swɪtʃ/
+light bulb|/ˈlaɪt bʌlb/|/ˈlaɪt bʌlb/
+extension cord|/ɪkˈstenʃn kɔːrd/|/ɪkˈstenʃn kɔːd/
+ashtray|/ˈæʃtreɪ/|/ˈæʃtreɪ/
+coaster|/ˈkoʊstər/|/ˈkəʊstə/
+tissue box|/ˈtɪʃuː bɑːks/|/ˈtɪʃuː bɒks/
+calendar|/ˈkælɪndər/|/ˈkælɪndə/
+altar|/ˈɔːltər/|/ˈɔːltə/
+bed|/bed/|/bed/
+mattress|/ˈmætrəs/|/ˈmætrəs/
+pillow|/ˈpɪloʊ/|/ˈpɪləʊ/
+pillowcase|/ˈpɪloʊkeɪs/|/ˈpɪləʊkeɪs/
+blanket|/ˈblæŋkɪt/|/ˈblæŋkɪt/
+duvet|/ˈduːveɪ/|/ˈduːveɪ/
+sheet|/ʃiːt/|/ʃiːt/
+mosquito net|/məˈskiːtoʊ net/|/məˈskiːtəʊ net/
+wardrobe|/ˈwɔːrdroʊb/|/ˈwɔːdrəʊb/
+closet|/ˈklɑːzɪt/|/ˈklɒzɪt/
+hanger|/ˈhæŋər/|/ˈhæŋə/
+drawer|/drɔːr/|/drɔː/
+chest of drawers|/ˌtʃest əv ˈdrɔːrz/|/ˌtʃest əv ˈdrɔːz/
+bedside table|/ˈbedsaɪd ˌteɪbl/|/ˈbedsaɪd ˌteɪbl/
+alarm clock|/əˈlɑːrm klɑːk/|/əˈlɑːm klɒk/
+mirror|/ˈmɪrər/|/ˈmɪrə/
+dressing table|/ˈdresɪŋ ˌteɪbl/|/ˈdresɪŋ ˌteɪbl/
+hairbrush|/ˈherbrʌʃ/|/ˈheəbrʌʃ/
+comb|/koʊm/|/kəʊm/
+pajamas|/pəˈdʒɑːməz/|/pəˈdʒɒməz/
+slippers|/ˈslɪpərz/|/ˈslɪpəz/
+teddy bear|/ˈtedi ber/|/ˈtedi beə/
+night light|/ˈnaɪt laɪt/|/ˈnaɪt laɪt/
+headboard|/ˈhedbɔːrd/|/ˈhedbɔːd/
+bunk bed|/ˈbʌŋk bed/|/ˈbʌŋk bed/
+crib|/krɪb/|/krɪb/
+toilet|/ˈtɔɪlət/|/ˈtɔɪlət/
+toilet paper|/ˈtɔɪlət ˌpeɪpər/|/ˈtɔɪlət ˌpeɪpə/
+shower|/ˈʃaʊər/|/ˈʃaʊə/
+bathtub|/ˈbæθtʌb/|/ˈbɑːθtʌb/
+washbasin|/ˈwɑːʃbeɪsn/|/ˈwɒʃbeɪsn/
+towel|/ˈtaʊəl/|/ˈtaʊəl/
+towel rail|/ˈtaʊəl reɪl/|/ˈtaʊəl reɪl/
+soap|/soʊp/|/səʊp/
+shampoo|/ʃæmˈpuː/|/ʃæmˈpuː/
+conditioner|/kənˈdɪʃənər/|/kənˈdɪʃənə/
+shower gel|/ˈʃaʊər dʒel/|/ˈʃaʊə dʒel/
+toothbrush|/ˈtuːθbrʌʃ/|/ˈtuːθbrʌʃ/
+toothpaste|/ˈtuːθpeɪst/|/ˈtuːθpeɪst/
+dental floss|/ˌdentl ˈflɑːs/|/ˌdentl ˈflɒs/
+mouthwash|/ˈmaʊθwɑːʃ/|/ˈmaʊθwɒʃ/
+razor|/ˈreɪzər/|/ˈreɪzə/
+hairdryer|/ˈherdraɪər/|/ˈheədraɪə/
+bath mat|/ˈbæθ mæt/|/ˈbɑːθ mæt/
+bucket|/ˈbʌkɪt/|/ˈbʌkɪt/
+scoop|/skuːp/|/skuːp/
+drain|/dreɪn/|/dreɪn/
+water heater|/ˈwɔːtər ˌhiːtər/|/ˈwɔːtə ˌhiːtə/
+scale|/skeɪl/|/skeɪl/
+cotton bud|/ˈkɑːtn bʌd/|/ˈkɒtn bʌd/
+nail clippers|/ˈneɪl ˌklɪpərz/|/ˈneɪl ˌklɪpəz/
+tile|/taɪl/|/taɪl/
+washing machine|/ˈwɑːʃɪŋ məˌʃiːn/|/ˈwɒʃɪŋ məˌʃiːn/
+dryer|/ˈdraɪər/|/ˈdraɪə/
+laundry basket|/ˈlɔːndri ˌbæskɪt/|/ˈlɔːndri ˌbɑːskɪt/
+detergent|/dɪˈtɜːrdʒənt/|/dɪˈtɜːdʒənt/
+fabric softener|/ˈfæbrɪk ˌsɔːfnər/|/ˈfæbrɪk ˌsɒfnə/
+clothesline|/ˈkloʊzlaɪn/|/ˈkləʊzlaɪn/
+clothes peg|/ˈkloʊðz peɡ/|/ˈkləʊðz peɡ/
+iron|/ˈaɪərn/|/ˈaɪən/
+ironing board|/ˈaɪərnɪŋ bɔːrd/|/ˈaɪənɪŋ bɔːd/
+broom|/bruːm/|/bruːm/
+dustpan|/ˈdʌstpæn/|/ˈdʌstpæn/
+mop|/mɑːp/|/mɒp/
+vacuum cleaner|/ˈvækjuːm ˌkliːnər/|/ˈvækjuːm ˌkliːnə/
+duster|/ˈdʌstər/|/ˈdʌstə/
+cloth|/klɔːθ/|/klɒθ/
+rubber gloves|/ˌrʌbər ˈɡlʌvz/|/ˌrʌbə ˈɡlʌvz/
+bleach|/bliːtʃ/|/bliːtʃ/
+trash bag|/ˈtræʃ bæɡ/|/ˈtræʃ bæɡ/
+wash|/wɑːʃ/|/wɒʃ/
+sweep|/swiːp/|/swiːp/
+wipe|/waɪp/|/waɪp/
+scrub|/skrʌb/|/skrʌb/
+rinse|/rɪns/|/rɪns/
+fold|/foʊld/|/fəʊld/
+hang|/hæŋ/|/hæŋ/
+dust|/dʌst/|/dʌst/
+tidy|/ˈtaɪdi/|/ˈtaɪdi/
+messy|/ˈmesi/|/ˈmesi/
+dirty|/ˈdɜːrti/|/ˈdɜːti/
+clean|/kliːn/|/kliːn/
+door|/dɔːr/|/dɔː/
+doorbell|/ˈdɔːrbel/|/ˈdɔːbel/
+doorknob|/ˈdɔːrnɑːb/|/ˈdɔːnɒb/
+lock|/lɑːk/|/lɒk/
+key|/kiː/|/kiː/
+window|/ˈwɪndoʊ/|/ˈwɪndəʊ/
+wall|/wɔːl/|/wɔːl/
+floor|/flɔːr/|/flɔː/
+ceiling|/ˈsiːlɪŋ/|/ˈsiːlɪŋ/
+roof|/ruːf/|/ruːf/
+stairs|/sterz/|/steəz/
+step|/step/|/step/
+balcony|/ˈbælkəni/|/ˈbælkəni/
+gate|/ɡeɪt/|/ɡeɪt/
+fence|/fens/|/fens/
+yard|/jɑːrd/|/jɑːd/
+garden|/ˈɡɑːrdn/|/ˈɡɑːdn/
+garage|/ɡəˈrɑːʒ/|/ɡəˈrɑːʒ/
+basement|/ˈbeɪsmənt/|/ˈbeɪsmənt/
+attic|/ˈætɪk/|/ˈætɪk/
+hallway|/ˈhɔːlweɪ/|/ˈhɔːlweɪ/
+corner|/ˈkɔːrnər/|/ˈkɔːnə/
+chimney|/ˈtʃɪmni/|/ˈtʃɪmni/
+pipe|/paɪp/|/paɪp/
+staircase|/ˈsterkeɪs/|/ˈsteəkeɪs/
+elevator|/ˈelɪveɪtər/|/ˈelɪveɪtə/
+mailbox|/ˈmeɪlbɑːks/|/ˈmeɪlbɑːks/
+doormat|/ˈdɔːrmæt/|/ˈdɔːmæt/
+porch|/pɔːrtʃ/|/pɔːtʃ/
+rooftop|/ˈruːftɑːp/|/ˈruːftɒp/
+shirt|/ʃɜːrt/|/ʃɜːt/
+T-shirt|/ˈtiː ʃɜːrt/|/ˈtiː ʃɜːt/
+blouse|/blaʊs/|/blaʊz/
+sweater|/ˈswetər/|/ˈswetə/
+hoodie|/ˈhʊdi/|/ˈhʊdi/
+jacket|/ˈdʒækɪt/|/ˈdʒækɪt/
+coat|/koʊt/|/kəʊt/
+raincoat|/ˈreɪnkoʊt/|/ˈreɪnkəʊt/
+vest|/vest/|/vest/
+suit|/suːt/|/suːt/
+dress|/dres/|/dres/
+skirt|/skɜːrt/|/skɜːt/
+trousers|/ˈtraʊzərz/|/ˈtraʊzəz/
+jeans|/dʒiːnz/|/dʒiːnz/
+shorts|/ʃɔːrts/|/ʃɔːts/
+underwear|/ˈʌndərwer/|/ˈʌndəweə/
+bra|/brɑː/|/brɑː/
+socks|/sɑːks/|/sɒks/
+uniform|/ˈjuːnɪfɔːrm/|/ˈjuːnɪfɔːm/
+swimsuit|/ˈswɪmsuːt/|/ˈswɪmsuːt/
+collar|/ˈkɑːlər/|/ˈkɒlə/
+sleeve|/sliːv/|/sliːv/
+pocket|/ˈpɑːkɪt/|/ˈpɒkɪt/
+button|/ˈbʌtn/|/ˈbʌtn/
+zipper|/ˈzɪpər/|/ˈzɪpə/
+hem|/hem/|/hem/
+size|/saɪz/|/saɪz/
+fabric|/ˈfæbrɪk/|/ˈfæbrɪk/
+cotton|/ˈkɑːtn/|/ˈkɒtn/
+wool|/wʊl/|/wʊl/
+silk|/sɪlk/|/sɪlk/
+leather|/ˈleðər/|/ˈleðə/
+wear|/wer/|/weə/
+put on|/ˌpʊt ˈɑːn/|/ˌpʊt ˈɒn/
+take off|/ˌteɪk ˈɔːf/|/ˌteɪk ˈɒf/
+loose|/luːs/|/luːs/
+tight|/taɪt/|/taɪt/
+striped|/straɪpt/|/straɪpt/
+plain|/pleɪn/|/pleɪn/
+shoes|/ʃuːz/|/ʃuːz/
+sneakers|/ˈsniːkərz/|/ˈsniːkəz/
+sandals|/ˈsændlz/|/ˈsændlz/
+flip-flops|/ˈflɪp flɑːps/|/ˈflɪp flɒps/
+boots|/buːts/|/buːts/
+high heels|/ˌhaɪ ˈhiːlz/|/ˌhaɪ ˈhiːlz/
+shoelace|/ˈʃuːleɪs/|/ˈʃuːleɪs/
+hat|/hæt/|/hæt/
+cap|/kæp/|/kæp/
+helmet|/ˈhelmɪt/|/ˈhelmɪt/
+scarf|/skɑːrf/|/skɑːf/
+gloves|/ɡlʌvz/|/ɡlʌvz/
+belt|/belt/|/belt/
+tie|/taɪ/|/taɪ/
+glasses|/ˈɡlæsɪz/|/ˈɡlɑːsɪz/
+sunglasses|/ˈsʌnɡlæsɪz/|/ˈsʌnɡlɑːsɪz/
+watch|/wɑːtʃ/|/wɒtʃ/
+necklace|/ˈnekləs/|/ˈnekləs/
+bracelet|/ˈbreɪslət/|/ˈbreɪslət/
+earrings|/ˈɪrɪŋz/|/ˈɪərɪŋz/
+ring|/rɪŋ/|/rɪŋ/
+handbag|/ˈhændbæɡ/|/ˈhændbæɡ/
+backpack|/ˈbækpæk/|/ˈbækpæk/
+wallet|/ˈwɑːlɪt/|/ˈwɒlɪt/
+purse|/pɜːrs/|/pɜːs/
+umbrella|/ʌmˈbrelə/|/ʌmˈbrelə/
+face mask|/ˈfeɪs mæsk/|/ˈfeɪs mɑːsk/
+hair tie|/ˈher taɪ/|/ˈheə taɪ/
+hairpin|/ˈherpɪn/|/ˈheəpɪn/
+suitcase|/ˈsuːtkeɪs/|/ˈsuːtkeɪs/
+keychain|/ˈkiːtʃeɪn/|/ˈkiːtʃeɪn/
+toothpick|/ˈtuːθpɪk/|/ˈtuːθpɪk/
+tissue|/ˈtɪʃuː/|/ˈtɪʃuː/
+wet wipes|/ˌwet ˈwaɪps/|/ˌwet ˈwaɪps/
+lotion|/ˈloʊʃn/|/ˈləʊʃn/
+sunscreen|/ˈsʌnskriːn/|/ˈsʌnskriːn/
+lipstick|/ˈlɪpstɪk/|/ˈlɪpstɪk/
+lip balm|/ˈlɪp bɑːm/|/ˈlɪp bɑːm/
+perfume|/pərˈfjuːm/|/pəˈfjuːm/
+deodorant|/diˈoʊdərənt/|/diˈəʊdərənt/
+makeup|/ˈmeɪkʌp/|/ˈmeɪkʌp/
+nail polish|/ˈneɪl ˌpɑːlɪʃ/|/ˈneɪl ˌpɒlɪʃ/
+tweezers|/ˈtwiːzərz/|/ˈtwiːzəz/
+hand cream|/ˈhænd kriːm/|/ˈhænd kriːm/
+face wash|/ˈfeɪs wɑːʃ/|/ˈfeɪs wɒʃ/
+cotton pad|/ˈkɑːtn pæd/|/ˈkɒtn pæd/
+sanitary pad|/ˈsænəteri pæd/|/ˈsænətri pæd/
+diaper|/ˈdaɪpər/|/ˈdaɪpə/
+baby bottle|/ˈbeɪbi ˌbɑːtl/|/ˈbeɪbi ˌbɒtl/
+water bottle|/ˈwɔːtər ˌbɑːtl/|/ˈwɔːtə ˌbɒtl/
+lunch box|/ˈlʌntʃ bɑːks/|/ˈlʌntʃ bɒks/
+lighter|/ˈlaɪtər/|/ˈlaɪtə/
+matches|/ˈmætʃɪz/|/ˈmætʃɪz/
+candle|/ˈkændl/|/ˈkændl/
+cigarette|/ˌsɪɡəˈret/|/ˌsɪɡəˈret/
+ID card|/ˌaɪ ˈdiː kɑːrd/|/ˌaɪ ˈdiː kɑːd/
+passport|/ˈpæspɔːrt/|/ˈpɑːspɔːt/
+coin|/kɔɪn/|/kɔɪn/
+banknote|/ˈbæŋknoʊt/|/ˈbæŋknəʊt/
+phone|/foʊn/|/fəʊn/
+charger|/ˈtʃɑːrdʒər/|/ˈtʃɑːdʒə/
+cable|/ˈkeɪbl/|/ˈkeɪbl/
+power bank|/ˈpaʊər bæŋk/|/ˈpaʊə bæŋk/
+battery|/ˈbætəri/|/ˈbætəri/
+laptop|/ˈlæptɑːp/|/ˈlæptɒp/
+computer|/kəmˈpjuːtər/|/kəmˈpjuːtə/
+screen|/skriːn/|/skriːn/
+keyboard|/ˈkiːbɔːrd/|/ˈkiːbɔːd/
+mouse|/maʊs/|/maʊs/
+tablet|/ˈtæblət/|/ˈtæblət/
+headphones|/ˈhedfoʊnz/|/ˈhedfəʊnz/
+earphones|/ˈɪrfoʊnz/|/ˈɪəfəʊnz/
+camera|/ˈkæmərə/|/ˈkæmərə/
+printer|/ˈprɪntər/|/ˈprɪntə/
+router|/ˈraʊtər/|/ˈraʊtə/
+USB stick|/ˌjuː es ˈbiː stɪk/|/ˌjuː es ˈbiː stɪk/
+smartwatch|/ˈsmɑːrtwɑːtʃ/|/ˈsmɑːtwɒtʃ/
+flashlight|/ˈflæʃlaɪt/|/ˈflæʃlaɪt/
+radio|/ˈreɪdioʊ/|/ˈreɪdiəʊ/
+microphone|/ˈmaɪkrəfoʊn/|/ˈmaɪkrəfəʊn/
+password|/ˈpæswɜːrd/|/ˈpɑːswɜːd/
+app|/æp/|/æp/
+message|/ˈmesɪdʒ/|/ˈmesɪdʒ/
+charge|/tʃɑːrdʒ/|/tʃɑːdʒ/
+turn on|/ˌtɜːrn ˈɑːn/|/ˌtɜːn ˈɒn/
+turn off|/ˌtɜːrn ˈɔːf/|/ˌtɜːn ˈɒf/
+plug in|/ˌplʌɡ ˈɪn/|/ˌplʌɡ ˈɪn/
+download|/ˌdaʊnˈloʊd/|/ˌdaʊnˈləʊd/
+type|/taɪp/|/taɪp/
+broken|/ˈbroʊkən/|/ˈbrəʊkən/
+wireless|/ˈwaɪərləs/|/ˈwaɪələs/
+pen|/pen/|/pen/
+pencil|/ˈpensl/|/ˈpensl/
+eraser|/ɪˈreɪsər/|/ɪˈreɪzə/
+sharpener|/ˈʃɑːrpənər/|/ˈʃɑːpənə/
+ruler|/ˈruːlər/|/ˈruːlə/
+notebook|/ˈnoʊtbʊk/|/ˈnəʊtbʊk/
+paper|/ˈpeɪpər/|/ˈpeɪpə/
+envelope|/ˈenvəloʊp/|/ˈenvələʊp/
+scissors|/ˈsɪzərz/|/ˈsɪzəz/
+glue|/ɡluː/|/ɡluː/
+tape|/teɪp/|/teɪp/
+stapler|/ˈsteɪplər/|/ˈsteɪplə/
+paper clip|/ˈpeɪpər klɪp/|/ˈpeɪpə klɪp/
+highlighter|/ˈhaɪlaɪtər/|/ˈhaɪlaɪtə/
+marker|/ˈmɑːrkər/|/ˈmɑːkə/
+crayon|/ˈkreɪɑːn/|/ˈkreɪɒn/
+folder|/ˈfoʊldər/|/ˈfəʊldə/
+sticky note|/ˈstɪki noʊt/|/ˈstɪki nəʊt/
+calculator|/ˈkælkjuleɪtər/|/ˈkælkjuleɪtə/
+desk|/desk/|/desk/
+chair|/tʃer/|/tʃeə/
+whiteboard|/ˈwaɪtbɔːrd/|/ˈwaɪtbɔːd/
+chalk|/tʃɔːk/|/tʃɔːk/
+pencil case|/ˈpensl keɪs/|/ˈpensl keɪs/
+dictionary|/ˈdɪkʃəneri/|/ˈdɪkʃənri/
+textbook|/ˈtekstbʊk/|/ˈtekstbʊk/
+stamp|/stæmp/|/stæmp/
+rubber band|/ˌrʌbər ˈbænd/|/ˌrʌbə ˈbænd/
+hammer|/ˈhæmər/|/ˈhæmə/
+nail|/neɪl/|/neɪl/
+screw|/skruː/|/skruː/
+screwdriver|/ˈskruːdraɪvər/|/ˈskruːdraɪvə/
+wrench|/rentʃ/|/rentʃ/
+pliers|/ˈplaɪərz/|/ˈplaɪəz/
+saw|/sɔː/|/sɔː/
+drill|/drɪl/|/drɪl/
+ladder|/ˈlædər/|/ˈlædə/
+tape measure|/ˈteɪp ˌmeʒər/|/ˈteɪp ˌmeʒə/
+toolbox|/ˈtuːlbɑːks/|/ˈtuːlbɒks/
+rope|/roʊp/|/rəʊp/
+wire|/ˈwaɪər/|/ˈwaɪə/
+hose|/hoʊz/|/həʊz/
+shovel|/ˈʃʌvl/|/ˈʃʌvl/
+axe|/æks/|/æks/
+paint|/peɪnt/|/peɪnt/
+brush|/brʌʃ/|/brʌʃ/
+bolt|/boʊlt/|/bəʊlt/
+glue gun|/ˈɡluː ɡʌn/|/ˈɡluː ɡʌn/
+padlock|/ˈpædlɑːk/|/ˈpædlɒk/
+chain|/tʃeɪn/|/tʃeɪn/
+fix|/fɪks/|/fɪks/
+build|/bɪld/|/bɪld/
+tighten|/ˈtaɪtn/|/ˈtaɪtn/
+loosen|/ˈluːsn/|/ˈluːsn/
+vegetable|/ˈvedʒtəbl/|/ˈvedʒtəbl/
+cabbage|/ˈkæbɪdʒ/|/ˈkæbɪdʒ/
+lettuce|/ˈletɪs/|/ˈletɪs/
+spinach|/ˈspɪnɪtʃ/|/ˈspɪnɪtʃ/
+morning glory|/ˌmɔːrnɪŋ ˈɡlɔːri/|/ˌmɔːnɪŋ ˈɡlɔːri/
+carrot|/ˈkærət/|/ˈkærət/
+potato|/pəˈteɪtoʊ/|/pəˈteɪtəʊ/
+sweet potato|/ˌswiːt pəˈteɪtoʊ/|/ˌswiːt pəˈteɪtəʊ/
+tomato|/təˈmeɪtoʊ/|/təˈmɑːtəʊ/
+cucumber|/ˈkjuːkʌmbər/|/ˈkjuːkʌmbə/
+onion|/ˈʌnjən/|/ˈʌnjən/
+spring onion|/ˌsprɪŋ ˈʌnjən/|/ˌsprɪŋ ˈʌnjən/
+garlic|/ˈɡɑːrlɪk/|/ˈɡɑːlɪk/
+ginger|/ˈdʒɪndʒər/|/ˈdʒɪndʒə/
+chili|/ˈtʃɪli/|/ˈtʃɪli/
+pepper|/ˈpepər/|/ˈpepə/
+corn|/kɔːrn/|/kɔːn/
+pumpkin|/ˈpʌmpkɪn/|/ˈpʌmpkɪn/
+eggplant|/ˈeɡplænt/|/ˈeɡplænt/
+mushroom|/ˈmʌʃrʊm/|/ˈmʌʃrʊm/
+bean|/biːn/|/biːn/
+green beans|/ˌɡriːn ˈbiːnz/|/ˌɡriːn ˈbiːnz/
+peas|/piːz/|/piːz/
+broccoli|/ˈbrɑːkəli/|/ˈbrɒkəli/
+cauliflower|/ˈkɔːliflaʊər/|/ˈkɒliflaʊə/
+bean sprouts|/ˈbiːn spraʊts/|/ˈbiːn spraʊts/
+herbs|/ɜːrbz/|/ɜːbz/
+coriander|/ˌkɔːriˈændər/|/ˌkɒriˈændə/
+lemongrass|/ˈleməŋɡræs/|/ˈleməŋɡrɑːs/
+bitter melon|/ˌbɪtər ˈmelən/|/ˌbɪtə ˈmelən/
+radish|/ˈrædɪʃ/|/ˈrædɪʃ/
+celery|/ˈseləri/|/ˈseləri/
+bamboo shoots|/bæmˈbuː ʃuːts/|/bæmˈbuː ʃuːts/
+cassava|/kəˈsɑːvə/|/kəˈsɑːvə/
+fruit|/fruːt/|/fruːt/
+apple|/ˈæpl/|/ˈæpl/
+banana|/bəˈnænə/|/bəˈnɑːnə/
+orange|/ˈɔːrɪndʒ/|/ˈɒrɪndʒ/
+lemon|/ˈlemən/|/ˈlemən/
+lime|/laɪm/|/laɪm/
+grape|/ɡreɪp/|/ɡreɪp/
+watermelon|/ˈwɔːtərmelən/|/ˈwɔːtəmelən/
+mango|/ˈmæŋɡoʊ/|/ˈmæŋɡəʊ/
+pineapple|/ˈpaɪnæpl/|/ˈpaɪnæpl/
+papaya|/pəˈpaɪə/|/pəˈpaɪə/
+coconut|/ˈkoʊkənʌt/|/ˈkəʊkənʌt/
+strawberry|/ˈstrɔːberi/|/ˈstrɔːbəri/
+pear|/per/|/peə/
+peach|/piːtʃ/|/piːtʃ/
+plum|/plʌm/|/plʌm/
+cherry|/ˈtʃeri/|/ˈtʃeri/
+guava|/ˈɡwɑːvə/|/ˈɡwɑːvə/
+lychee|/ˈliːtʃiː/|/ˈlaɪtʃiː/
+longan|/ˈlɔːŋɡən/|/ˈlɒŋɡən/
+durian|/ˈdʊriən/|/ˈdʊəriən/
+jackfruit|/ˈdʒækfruːt/|/ˈdʒækfruːt/
+dragon fruit|/ˈdræɡən fruːt/|/ˈdræɡən fruːt/
+rambutan|/ræmˈbuːtn/|/ræmˈbuːtn/
+grapefruit|/ˈɡreɪpfruːt/|/ˈɡreɪpfruːt/
+avocado|/ˌævəˈkɑːdoʊ/|/ˌævəˈkɑːdəʊ/
+kiwi|/ˈkiːwiː/|/ˈkiːwiː/
+star fruit|/ˈstɑːr fruːt/|/ˈstɑː fruːt/
+peel|/piːl/|/piːl/
+seed|/siːd/|/siːd/
+ripe|/raɪp/|/raɪp/
+sour|/ˈsaʊər/|/ˈsaʊə/
+juicy|/ˈdʒuːsi/|/ˈdʒuːsi/
+meat|/miːt/|/miːt/
+beef|/biːf/|/biːf/
+pork|/pɔːrk/|/pɔːk/
+chicken|/ˈtʃɪkɪn/|/ˈtʃɪkɪn/
+duck|/dʌk/|/dʌk/
+sausage|/ˈsɔːsɪdʒ/|/ˈsɒsɪdʒ/
+ham|/hæm/|/hæm/
+bacon|/ˈbeɪkən/|/ˈbeɪkən/
+fish|/fɪʃ/|/fɪʃ/
+shrimp|/ʃrɪmp/|/ʃrɪmp/
+crab|/kræb/|/kræb/
+squid|/skwɪd/|/skwɪd/
+clam|/klæm/|/klæm/
+egg|/eɡ/|/eɡ/
+tofu|/ˈtoʊfuː/|/ˈtəʊfuː/
+rice|/raɪs/|/raɪs/
+noodles|/ˈnuːdlz/|/ˈnuːdlz/
+bread|/bred/|/bred/
+flour|/ˈflaʊər/|/ˈflaʊə/
+butter|/ˈbʌtər/|/ˈbʌtə/
+cheese|/tʃiːz/|/tʃiːz/
+yogurt|/ˈjoʊɡərt/|/ˈjəʊɡət/
+soup|/suːp/|/suːp/
+cake|/keɪk/|/keɪk/
+biscuit|/ˈbɪskɪt/|/ˈbɪskɪt/
+candy|/ˈkændi/|/ˈkændi/
+ice cream|/ˌaɪs ˈkriːm/|/ˌaɪs ˈkriːm/
+porridge|/ˈpɔːrɪdʒ/|/ˈpɒrɪdʒ/
+spring roll|/ˌsprɪŋ ˈroʊl/|/ˌsprɪŋ ˈrəʊl/
+sandwich|/ˈsænwɪtʃ/|/ˈsænwɪtʃ/
+breakfast|/ˈbrekfəst/|/ˈbrekfəst/
+lunch|/lʌntʃ/|/lʌntʃ/
+dinner|/ˈdɪnər/|/ˈdɪnə/
+water|/ˈwɔːtər/|/ˈwɔːtə/
+milk|/mɪlk/|/mɪlk/
+coffee|/ˈkɔːfi/|/ˈkɒfi/
+tea|/tiː/|/tiː/
+juice|/dʒuːs/|/dʒuːs/
+smoothie|/ˈsmuːði/|/ˈsmuːði/
+soft drink|/ˌsɔːft ˈdrɪŋk/|/ˌsɒft ˈdrɪŋk/
+beer|/bɪr/|/bɪə/
+wine|/waɪn/|/waɪn/
+ice|/aɪs/|/aɪs/
+straw|/strɔː/|/strɔː/
+salt|/sɔːlt/|/sɒlt/
+sugar|/ˈʃʊɡər/|/ˈʃʊɡə/
+black pepper|/ˌblæk ˈpepər/|/ˌblæk ˈpepə/
+fish sauce|/ˈfɪʃ sɔːs/|/ˈfɪʃ sɔːs/
+soy sauce|/ˌsɔɪ ˈsɔːs/|/ˌsɔɪ ˈsɔːs/
+vinegar|/ˈvɪnɪɡər/|/ˈvɪnɪɡə/
+cooking oil|/ˈkʊkɪŋ ɔɪl/|/ˈkʊkɪŋ ɔɪl/
+honey|/ˈhʌni/|/ˈhʌni/
+ketchup|/ˈketʃəp/|/ˈketʃəp/
+chili sauce|/ˈtʃɪli sɔːs/|/ˈtʃɪli sɔːs/
+spice|/spaɪs/|/spaɪs/
+boil|/bɔɪl/|/bɔɪl/
+fry|/fraɪ/|/fraɪ/
+grill|/ɡrɪl/|/ɡrɪl/
+steam|/stiːm/|/stiːm/
+stir|/stɜːr/|/stɜː/
+chop|/tʃɑːp/|/tʃɒp/
+pour|/pɔːr/|/pɔː/
+taste|/teɪst/|/teɪst/
+sweet|/swiːt/|/swiːt/
+salty|/ˈsɔːlti/|/ˈsɒlti/
+bitter|/ˈbɪtər/|/ˈbɪtə/
+spicy|/ˈspaɪsi/|/ˈspaɪsi/
+delicious|/dɪˈlɪʃəs/|/dɪˈlɪʃəs/
+fresh|/freʃ/|/freʃ/
+street|/striːt/|/striːt/
+road|/roʊd/|/rəʊd/
+sidewalk|/ˈsaɪdwɔːk/|/ˈsaɪdwɔːk/
+alley|/ˈæli/|/ˈæli/
+traffic light|/ˈtræfɪk laɪt/|/ˈtræfɪk laɪt/
+crosswalk|/ˈkrɔːswɔːk/|/ˈkrɒswɔːk/
+intersection|/ˌɪntərˈsekʃn/|/ˌɪntəˈsekʃn/
+roundabout|/ˈraʊndəbaʊt/|/ˈraʊndəbaʊt/
+bridge|/brɪdʒ/|/brɪdʒ/
+street light|/ˈstriːt laɪt/|/ˈstriːt laɪt/
+sign|/saɪn/|/saɪn/
+bus stop|/ˈbʌs stɑːp/|/ˈbʌs stɒp/
+building|/ˈbɪldɪŋ/|/ˈbɪldɪŋ/
+apartment|/əˈpɑːrtmənt/|/əˈpɑːtmənt/
+market|/ˈmɑːrkɪt/|/ˈmɑːkɪt/
+supermarket|/ˈsuːpərmɑːrkɪt/|/ˈsuːpəmɑːkɪt/
+shop|/ʃɑːp/|/ʃɒp/
+convenience store|/kənˈviːniəns stɔːr/|/kənˈviːniəns stɔː/
+pharmacy|/ˈfɑːrməsi/|/ˈfɑːməsi/
+hospital|/ˈhɑːspɪtl/|/ˈhɒspɪtl/
+bank|/bæŋk/|/bæŋk/
+ATM|/ˌeɪ tiː ˈem/|/ˌeɪ tiː ˈem/
+post office|/ˈpoʊst ˌɔːfɪs/|/ˈpəʊst ˌɒfɪs/
+school|/skuːl/|/skuːl/
+park|/pɑːrk/|/pɑːk/
+restaurant|/ˈrestərɑːnt/|/ˈrestərɒnt/
+café|/kæˈfeɪ/|/kæˈfeɪ/
+gas station|/ˈɡæs ˌsteɪʃn/|/ˈɡæs ˌsteɪʃn/
+temple|/ˈtempl/|/ˈtempl/
+church|/tʃɜːrtʃ/|/tʃɜːtʃ/
+police station|/pəˈliːs ˌsteɪʃn/|/pəˈliːs ˌsteɪʃn/
+trash can|/ˈtræʃ kæn/|/ˈtræʃ kæn/
+bench|/bentʃ/|/bentʃ/
+pothole|/ˈpɑːthoʊl/|/ˈpɒthəʊl/
+puddle|/ˈpʌdl/|/ˈpʌdl/
+noisy|/ˈnɔɪzi/|/ˈnɔɪzi/
+crowded|/ˈkraʊdɪd/|/ˈkraʊdɪd/
+car|/kɑːr/|/kɑː/
+motorbike|/ˈmoʊtərbaɪk/|/ˈməʊtəbaɪk/
+bicycle|/ˈbaɪsɪkl/|/ˈbaɪsɪkl/
+bus|/bʌs/|/bʌs/
+taxi|/ˈtæksi/|/ˈtæksi/
+truck|/trʌk/|/trʌk/
+train|/treɪn/|/treɪn/
+plane|/pleɪn/|/pleɪn/
+boat|/boʊt/|/bəʊt/
+ship|/ʃɪp/|/ʃɪp/
+ambulance|/ˈæmbjələns/|/ˈæmbjələns/
+fire engine|/ˈfaɪər ˌendʒɪn/|/ˈfaɪə ˌendʒɪn/
+wheel|/wiːl/|/wiːl/
+tire|/ˈtaɪər/|/ˈtaɪə/
+engine|/ˈendʒɪn/|/ˈendʒɪn/
+brake|/breɪk/|/breɪk/
+seat|/siːt/|/siːt/
+seat belt|/ˈsiːt belt/|/ˈsiːt belt/
+headlight|/ˈhedlaɪt/|/ˈhedlaɪt/
+horn|/hɔːrn/|/hɔːn/
+steering wheel|/ˈstɪrɪŋ wiːl/|/ˈstɪərɪŋ wiːl/
+handlebar|/ˈhændlbɑːr/|/ˈhændlbɑː/
+petrol|/ˈpetrəl/|/ˈpetrəl/
+license plate|/ˈlaɪsns pleɪt/|/ˈlaɪsns pleɪt/
+driver|/ˈdraɪvər/|/ˈdraɪvə/
+passenger|/ˈpæsɪndʒər/|/ˈpæsɪndʒə/
+ticket|/ˈtɪkɪt/|/ˈtɪkɪt/
+drive|/draɪv/|/draɪv/
+ride|/raɪd/|/raɪd/
+honk|/hɑːŋk/|/hɒŋk/
+head|/hed/|/hed/
+hair|/her/|/heə/
+face|/feɪs/|/feɪs/
+forehead|/ˈfɔːrhed/|/ˈfɔːhed/
+eyebrow|/ˈaɪbraʊ/|/ˈaɪbraʊ/
+eye|/aɪ/|/aɪ/
+eyelash|/ˈaɪlæʃ/|/ˈaɪlæʃ/
+ear|/ɪr/|/ɪə/
+nose|/noʊz/|/nəʊz/
+cheek|/tʃiːk/|/tʃiːk/
+mouth|/maʊθ/|/maʊθ/
+lip|/lɪp/|/lɪp/
+tooth|/tuːθ/|/tuːθ/
+tongue|/tʌŋ/|/tʌŋ/
+chin|/tʃɪn/|/tʃɪn/
+neck|/nek/|/nek/
+throat|/θroʊt/|/θrəʊt/
+shoulder|/ˈʃoʊldər/|/ˈʃəʊldə/
+arm|/ɑːrm/|/ɑːm/
+elbow|/ˈelboʊ/|/ˈelbəʊ/
+wrist|/rɪst/|/rɪst/
+hand|/hænd/|/hænd/
+finger|/ˈfɪŋɡər/|/ˈfɪŋɡə/
+thumb|/θʌm/|/θʌm/
+fingernail|/ˈfɪŋɡərneɪl/|/ˈfɪŋɡəneɪl/
+chest|/tʃest/|/tʃest/
+stomach|/ˈstʌmək/|/ˈstʌmək/
+back|/bæk/|/bæk/
+waist|/weɪst/|/weɪst/
+hip|/hɪp/|/hɪp/
+leg|/leɡ/|/leɡ/
+knee|/niː/|/niː/
+ankle|/ˈæŋkl/|/ˈæŋkl/
+foot|/fʊt/|/fʊt/
+toe|/toʊ/|/təʊ/
+heel|/hiːl/|/hiːl/
+skin|/skɪn/|/skɪn/
+bone|/boʊn/|/bəʊn/
+heart|/hɑːrt/|/hɑːt/
+blood|/blʌd/|/blʌd/
+sky|/skaɪ/|/skaɪ/
+sun|/sʌn/|/sʌn/
+moon|/muːn/|/muːn/
+star|/stɑːr/|/stɑː/
+cloud|/klaʊd/|/klaʊd/
+rain|/reɪn/|/reɪn/
+wind|/wɪnd/|/wɪnd/
+storm|/stɔːrm/|/stɔːm/
+thunder|/ˈθʌndər/|/ˈθʌndə/
+lightning|/ˈlaɪtnɪŋ/|/ˈlaɪtnɪŋ/
+rainbow|/ˈreɪnboʊ/|/ˈreɪnbəʊ/
+fog|/fɑːɡ/|/fɒɡ/
+snow|/snoʊ/|/snəʊ/
+tree|/triː/|/triː/
+leaf|/liːf/|/liːf/
+branch|/bræntʃ/|/brɑːntʃ/
+root|/ruːt/|/ruːt/
+flower|/ˈflaʊər/|/ˈflaʊə/
+grass|/ɡræs/|/ɡrɑːs/
+bush|/bʊʃ/|/bʊʃ/
+rock|/rɑːk/|/rɒk/
+stone|/stoʊn/|/stəʊn/
+sand|/sænd/|/sænd/
+mud|/mʌd/|/mʌd/
+river|/ˈrɪvər/|/ˈrɪvə/
+lake|/leɪk/|/leɪk/
+sea|/siː/|/siː/
+beach|/biːtʃ/|/biːtʃ/
+wave|/weɪv/|/weɪv/
+mountain|/ˈmaʊntn/|/ˈmaʊntn/
+hill|/hɪl/|/hɪl/
+field|/fiːld/|/fiːld/
+rice field|/ˈraɪs fiːld/|/ˈraɪs fiːld/
+forest|/ˈfɔːrɪst/|/ˈfɒrɪst/
+island|/ˈaɪlənd/|/ˈaɪlənd/
+sunny|/ˈsʌni/|/ˈsʌni/
+cloudy|/ˈklaʊdi/|/ˈklaʊdi/
+windy|/ˈwɪndi/|/ˈwɪndi/
+humid|/ˈhjuːmɪd/|/ˈhjuːmɪd/
+dog|/dɔːɡ/|/dɒɡ/
+puppy|/ˈpʌpi/|/ˈpʌpi/
+cat|/kæt/|/kæt/
+kitten|/ˈkɪtn/|/ˈkɪtn/
+bird|/bɜːrd/|/bɜːd/
+rooster|/ˈruːstər/|/ˈruːstə/
+pig|/pɪɡ/|/pɪɡ/
+cow|/kaʊ/|/kaʊ/
+buffalo|/ˈbʌfəloʊ/|/ˈbʌfələʊ/
+horse|/hɔːrs/|/hɔːs/
+goat|/ɡoʊt/|/ɡəʊt/
+sheep|/ʃiːp/|/ʃiːp/
+rabbit|/ˈræbɪt/|/ˈræbɪt/
+rat|/ræt/|/ræt/
+snake|/sneɪk/|/sneɪk/
+frog|/frɑːɡ/|/frɒɡ/
+turtle|/ˈtɜːrtl/|/ˈtɜːtl/
+monkey|/ˈmʌŋki/|/ˈmʌŋki/
+tiger|/ˈtaɪɡər/|/ˈtaɪɡə/
+lion|/ˈlaɪən/|/ˈlaɪən/
+elephant|/ˈelɪfənt/|/ˈelɪfənt/
+bear|/ber/|/beə/
+wolf|/wʊlf/|/wʊlf/
+fox|/fɑːks/|/fɒks/
+deer|/dɪr/|/dɪə/
+mosquito|/məˈskiːtoʊ/|/məˈskiːtəʊ/
+fly|/flaɪ/|/flaɪ/
+ant|/ænt/|/ænt/
+cockroach|/ˈkɑːkroʊtʃ/|/ˈkɒkrəʊtʃ/
+spider|/ˈspaɪdər/|/ˈspaɪdə/
+bee|/biː/|/biː/
+butterfly|/ˈbʌtərflaɪ/|/ˈbʌtəflaɪ/
+gecko|/ˈɡekoʊ/|/ˈɡekəʊ/
+owl|/aʊl/|/aʊl/
+crow|/kroʊ/|/krəʊ/
+tail|/teɪl/|/teɪl/
+wing|/wɪŋ/|/wɪŋ/
+feather|/ˈfeðər/|/ˈfeðə/
+fur|/fɜːr/|/fɜː/
+medicine|/ˈmedɪsn/|/ˈmedɪsn/
+pill|/pɪl/|/pɪl/
+syrup|/ˈsɪrəp/|/ˈsɪrəp/
+bandage|/ˈbændɪdʒ/|/ˈbændɪdʒ/
+plaster|/ˈplæstər/|/ˈplɑːstə/
+thermometer|/θərˈmɑːmɪtər/|/θəˈmɒmɪtə/
+first aid kit|/ˌfɜːrst ˈeɪd kɪt/|/ˌfɜːst ˈeɪd kɪt/
+injection|/ɪnˈdʒekʃn/|/ɪnˈdʒekʃn/
+cream|/kriːm/|/kriːm/
+eye drops|/ˈaɪ drɑːps/|/ˈaɪ drɒps/
+wheelchair|/ˈwiːltʃer/|/ˈwiːltʃeə/
+doctor|/ˈdɑːktər/|/ˈdɒktə/
+nurse|/nɜːrs/|/nɜːs/
+patient|/ˈpeɪʃnt/|/ˈpeɪʃnt/
+dentist|/ˈdentɪst/|/ˈdentɪst/
+wound|/wuːnd/|/wuːnd/
+bruise|/bruːz/|/bruːz/
+scar|/skɑːr/|/skɑː/
+fever|/ˈfiːvər/|/ˈfiːvə/
+cough|/kɔːf/|/kɒf/
+cold|/koʊld/|/kəʊld/
+pain|/peɪn/|/peɪn/
+hurt|/hɜːrt/|/hɜːt/
+bleed|/bliːd/|/bliːd/
+sick|/sɪk/|/sɪk/
+dizzy|/ˈdɪzi/|/ˈdɪzi/
+go|/ɡoʊ/|/ɡəʊ/
+come|/kʌm/|/kʌm/
+walk|/wɔːk/|/wɔːk/
+run|/rʌn/|/rʌn/
+rush|/rʌʃ/|/rʌʃ/
+hurry|/ˈhɜːri/|/ˈhʌri/
+climb|/klaɪm/|/klaɪm/
+jump|/dʒʌmp/|/dʒʌmp/
+fall|/fɔːl/|/fɔːl/
+swim|/swɪm/|/swɪm/
+crawl|/krɔːl/|/krɔːl/
+sneak|/sniːk/|/sniːk/
+creep|/kriːp/|/kriːp/
+wander|/ˈwɑːndər/|/ˈwɒndə/
+follow|/ˈfɑːloʊ/|/ˈfɒləʊ/
+chase|/tʃeɪs/|/tʃeɪs/
+escape|/ɪˈskeɪp/|/ɪˈskeɪp/
+flee|/fliː/|/fliː/
+hide|/haɪd/|/haɪd/
+leave|/liːv/|/liːv/
+arrive|/əˈraɪv/|/əˈraɪv/
+return|/rɪˈtɜːrn/|/rɪˈtɜːn/
+enter|/ˈentər/|/ˈentə/
+approach|/əˈproʊtʃ/|/əˈprəʊtʃ/
+cross|/krɔːs/|/krɒs/
+sit|/sɪt/|/sɪt/
+stand|/stænd/|/stænd/
+lie|/laɪ/|/laɪ/
+kneel|/niːl/|/niːl/
+lean|/liːn/|/liːn/
+rise|/raɪz/|/raɪz/
+float|/floʊt/|/fləʊt/
+slip|/slɪp/|/slɪp/
+stumble|/ˈstʌmbl/|/ˈstʌmbl/
+dash|/dæʃ/|/dæʃ/
+march|/mɑːrtʃ/|/mɑːtʃ/
+tiptoe|/ˈtɪptoʊ/|/ˈtɪptəʊ/
+travel|/ˈtrævl/|/ˈtrævl/
+say|/seɪ/|/seɪ/
+tell|/tel/|/tel/
+speak|/spiːk/|/spiːk/
+talk|/tɔːk/|/tɔːk/
+ask|/æsk/|/ɑːsk/
+answer|/ˈænsər/|/ˈɑːnsə/
+reply|/rɪˈplaɪ/|/rɪˈplaɪ/
+shout|/ʃaʊt/|/ʃaʊt/
+yell|/jel/|/jel/
+scream|/skriːm/|/skriːm/
+cry|/kraɪ/|/kraɪ/
+whisper|/ˈwɪspər/|/ˈwɪspə/
+mutter|/ˈmʌtər/|/ˈmʌtə/
+call|/kɔːl/|/kɔːl/
+explain|/ɪkˈspleɪn/|/ɪkˈspleɪn/
+promise|/ˈprɑːmɪs/|/ˈprɒmɪs/
+warn|/wɔːrn/|/wɔːn/
+beg|/beɡ/|/beɡ/
+laugh|/læf/|/lɑːf/
+smile|/smaɪl/|/smaɪl/
+sigh|/saɪ/|/saɪ/
+think|/θɪŋk/|/θɪŋk/
+know|/noʊ/|/nəʊ/
+believe|/bɪˈliːv/|/bɪˈliːv/
+remember|/rɪˈmembər/|/rɪˈmembə/
+forget|/fərˈɡet/|/fəˈɡet/
+wonder|/ˈwʌndər/|/ˈwʌndə/
+imagine|/ɪˈmædʒɪn/|/ɪˈmædʒɪn/
+realize|/ˈriːəlaɪz/|/ˈrɪəlaɪz/
+understand|/ˌʌndərˈstænd/|/ˌʌndəˈstænd/
+decide|/dɪˈsaɪd/|/dɪˈsaɪd/
+guess|/ɡes/|/ɡes/
+hope|/hoʊp/|/həʊp/
+wish|/wɪʃ/|/wɪʃ/
+dream|/driːm/|/driːm/
+worry|/ˈwɜːri/|/ˈwʌri/
+mean|/miːn/|/miːn/
+pretend|/prɪˈtend/|/prɪˈtend/
+agree|/əˈɡriː/|/əˈɡriː/
+refuse|/rɪˈfjuːz/|/rɪˈfjuːz/
+see|/siː/|/siː/
+look|/lʊk/|/lʊk/
+stare|/ster/|/steə/
+glance|/ɡlæns/|/ɡlɑːns/
+peer|/pɪr/|/pɪə/
+notice|/ˈnoʊtɪs/|/ˈnəʊtɪs/
+hear|/hɪr/|/hɪə/
+listen|/ˈlɪsn/|/ˈlɪsn/
+smell|/smel/|/smel/
+touch|/tʌtʃ/|/tʌtʃ/
+feel|/fiːl/|/fiːl/
+shiver|/ˈʃɪvər/|/ˈʃɪvə/
+tremble|/ˈtrembl/|/ˈtrembl/
+blink|/blɪŋk/|/blɪŋk/
+frown|/fraʊn/|/fraʊn/
+nod|/nɑːd/|/nɒd/
+shake|/ʃeɪk/|/ʃeɪk/
+gasp|/ɡæsp/|/ɡɑːsp/
+breathe|/briːð/|/briːð/
+sleep|/sliːp/|/sliːp/
+wake|/weɪk/|/weɪk/
+yawn|/jɔːn/|/jɔːn/
+weep|/wiːp/|/wiːp/
+blush|/blʌʃ/|/blʌʃ/
+shine|/ʃaɪn/|/ʃaɪn/
+glow|/ɡloʊ/|/ɡləʊ/
+sparkle|/ˈspɑːrkl/|/ˈspɑːkl/
+appear|/əˈpɪr/|/əˈpɪə/
+disappear|/ˌdɪsəˈpɪr/|/ˌdɪsəˈpɪə/
+seem|/siːm/|/siːm/
+take|/teɪk/|/teɪk/
+give|/ɡɪv/|/ɡɪv/
+bring|/brɪŋ/|/brɪŋ/
+carry|/ˈkæri/|/ˈkæri/
+hold|/hoʊld/|/həʊld/
+grab|/ɡræb/|/ɡræb/
+catch|/kætʃ/|/kætʃ/
+throw|/θroʊ/|/θrəʊ/
+drop|/drɑːp/|/drɒp/
+pick up|/ˌpɪk ˈʌp/|/ˌpɪk ˈʌp/
+push|/pʊʃ/|/pʊʃ/
+pull|/pʊl/|/pʊl/
+lift|/lɪft/|/lɪft/
+open|/ˈoʊpən/|/ˈəʊpən/
+close|/kloʊz/|/kləʊz/
+shut|/ʃʌt/|/ʃʌt/
+knock|/nɑːk/|/nɒk/
+hit|/hɪt/|/hɪt/
+kick|/kɪk/|/kɪk/
+break|/breɪk/|/breɪk/
+cut|/kʌt/|/kʌt/
+tear|/ter/|/teə/
+dig|/dɪɡ/|/dɪɡ/
+fill|/fɪl/|/fɪl/
+wrap|/ræp/|/ræp/
+hug|/hʌɡ/|/hʌɡ/
+kiss|/kɪs/|/kɪs/
+point|/pɔɪnt/|/pɔɪnt/
+reach|/riːtʃ/|/riːtʃ/
+search|/sɜːrtʃ/|/sɜːtʃ/
+find|/faɪnd/|/faɪnd/
+lose|/luːz/|/luːz/
+steal|/stiːl/|/stiːl/
+keep|/kiːp/|/kiːp/
+put|/pʊt/|/pʊt/
+make|/meɪk/|/meɪk/
+write|/raɪt/|/raɪt/
+read|/riːd/|/riːd/
+draw|/drɔː/|/drɔː/
+be|/biː/|/biː/
+have|/hæv/|/hæv/
+do|/duː/|/duː/
+get|/ɡet/|/ɡet/
+become|/bɪˈkʌm/|/bɪˈkʌm/
+begin|/bɪˈɡɪn/|/bɪˈɡɪn/
+start|/stɑːrt/|/stɑːt/
+stop|/stɑːp/|/stɒp/
+finish|/ˈfɪnɪʃ/|/ˈfɪnɪʃ/
+happen|/ˈhæpən/|/ˈhæpən/
+change|/tʃeɪndʒ/|/tʃeɪndʒ/
+grow|/ɡroʊ/|/ɡrəʊ/
+live|/lɪv/|/lɪv/
+die|/daɪ/|/daɪ/
+born|/bɔːrn/|/bɔːn/
+eat|/iːt/|/iːt/
+drink|/drɪŋk/|/drɪŋk/
+buy|/baɪ/|/baɪ/
+sell|/sel/|/sel/
+pay|/peɪ/|/peɪ/
+send|/send/|/send/
+meet|/miːt/|/miːt/
+marry|/ˈmæri/|/ˈmæri/
+visit|/ˈvɪzɪt/|/ˈvɪzɪt/
+help|/help/|/help/
+save|/seɪv/|/seɪv/
+protect|/prəˈtekt/|/prəˈtekt/
+fight|/faɪt/|/faɪt/
+attack|/əˈtæk/|/əˈtæk/
+kill|/kɪl/|/kɪl/
+win|/wɪn/|/wɪn/
+fail|/feɪl/|/feɪl/
+try|/traɪ/|/traɪ/
+need|/niːd/|/niːd/
+want|/wɑːnt/|/wɒnt/
+like|/laɪk/|/laɪk/
+love|/lʌv/|/lʌv/
+hate|/heɪt/|/heɪt/
+fear|/fɪr/|/fɪə/
+wait|/weɪt/|/weɪt/
+learn|/lɜːrn/|/lɜːn/
+teach|/tiːtʃ/|/tiːtʃ/
+burn|/bɜːrn/|/bɜːn/
+belong|/bɪˈlɔːŋ/|/bɪˈlɒŋ/
+allow|/əˈlaʊ/|/əˈlaʊ/
+rescue|/ˈreskjuː/|/ˈreskjuː/
+trust|/trʌst/|/trʌst/
+obey|/əˈbeɪ/|/əˈbeɪ/
+tall|/tɔːl/|/tɔːl/
+short|/ʃɔːrt/|/ʃɔːt/
+fat|/fæt/|/fæt/
+thin|/θɪn/|/θɪn/
+young|/jʌŋ/|/jʌŋ/
+old|/oʊld/|/əʊld/
+beautiful|/ˈbjuːtɪfl/|/ˈbjuːtɪfl/
+pretty|/ˈprɪti/|/ˈprɪti/
+handsome|/ˈhænsəm/|/ˈhænsəm/
+ugly|/ˈʌɡli/|/ˈʌɡli/
+strong|/strɔːŋ/|/strɒŋ/
+weak|/wiːk/|/wiːk/
+kind|/kaɪnd/|/kaɪnd/
+gentle|/ˈdʒentl/|/ˈdʒentl/
+cruel|/ˈkruːəl/|/ˈkruːəl/
+wicked|/ˈwɪkɪd/|/ˈwɪkɪd/
+brave|/breɪv/|/breɪv/
+clever|/ˈklevər/|/ˈklevə/
+wise|/waɪz/|/waɪz/
+foolish|/ˈfuːlɪʃ/|/ˈfuːlɪʃ/
+lazy|/ˈleɪzi/|/ˈleɪzi/
+honest|/ˈɑːnɪst/|/ˈɒnɪst/
+polite|/pəˈlaɪt/|/pəˈlaɪt/
+rude|/ruːd/|/ruːd/
+shy|/ʃaɪ/|/ʃaɪ/
+proud|/praʊd/|/praʊd/
+greedy|/ˈɡriːdi/|/ˈɡriːdi/
+selfish|/ˈselfɪʃ/|/ˈselfɪʃ/
+generous|/ˈdʒenərəs/|/ˈdʒenərəs/
+curious|/ˈkjʊriəs/|/ˈkjʊəriəs/
+stubborn|/ˈstʌbərn/|/ˈstʌbən/
+rich|/rɪtʃ/|/rɪtʃ/
+poor|/pʊr/|/pɔː/
+famous|/ˈfeɪməs/|/ˈfeɪməs/
+busy|/ˈbɪzi/|/ˈbɪzi/
+hungry|/ˈhʌŋɡri/|/ˈhʌŋɡri/
+thirsty|/ˈθɜːrsti/|/ˈθɜːsti/
+tired|/ˈtaɪərd/|/ˈtaɪəd/
+sleepy|/ˈsliːpi/|/ˈsliːpi/
+alive|/əˈlaɪv/|/əˈlaɪv/
+dead|/ded/|/ded/
+happy|/ˈhæpi/|/ˈhæpi/
+sad|/sæd/|/sæd/
+angry|/ˈæŋɡri/|/ˈæŋɡri/
+afraid|/əˈfreɪd/|/əˈfreɪd/
+scared|/skerd/|/skeəd/
+frightened|/ˈfraɪtnd/|/ˈfraɪtnd/
+terrified|/ˈterɪfaɪd/|/ˈterɪfaɪd/
+surprised|/sərˈpraɪzd/|/səˈpraɪzd/
+shocked|/ʃɑːkt/|/ʃɒkt/
+worried|/ˈwɜːrid/|/ˈwʌrid/
+nervous|/ˈnɜːrvəs/|/ˈnɜːvəs/
+calm|/kɑːm/|/kɑːm/
+excited|/ɪkˈsaɪtɪd/|/ɪkˈsaɪtɪd/
+lonely|/ˈloʊnli/|/ˈləʊnli/
+jealous|/ˈdʒeləs/|/ˈdʒeləs/
+ashamed|/əˈʃeɪmd/|/əˈʃeɪmd/
+embarrassed|/ɪmˈbærəst/|/ɪmˈbærəst/
+grateful|/ˈɡreɪtfl/|/ˈɡreɪtfl/
+glad|/ɡlæd/|/ɡlæd/
+cheerful|/ˈtʃɪrfl/|/ˈtʃɪəfl/
+upset|/ʌpˈset/|/ʌpˈset/
+miserable|/ˈmɪzrəbl/|/ˈmɪzrəbl/
+furious|/ˈfjʊriəs/|/ˈfjʊəriəs/
+confused|/kənˈfjuːzd/|/kənˈfjuːzd/
+amazed|/əˈmeɪzd/|/əˈmeɪzd/
+relieved|/rɪˈliːvd/|/rɪˈliːvd/
+disappointed|/ˌdɪsəˈpɔɪntɪd/|/ˌdɪsəˈpɔɪntɪd/
+sorry|/ˈsɑːri/|/ˈsɒri/
+bored|/bɔːrd/|/bɔːd/
+anxious|/ˈæŋkʃəs/|/ˈæŋkʃəs/
+big|/bɪɡ/|/bɪɡ/
+small|/smɔːl/|/smɔːl/
+huge|/hjuːdʒ/|/hjuːdʒ/
+tiny|/ˈtaɪni/|/ˈtaɪni/
+long|/lɔːŋ/|/lɒŋ/
+wide|/waɪd/|/waɪd/
+narrow|/ˈnæroʊ/|/ˈnærəʊ/
+deep|/diːp/|/diːp/
+high|/haɪ/|/haɪ/
+low|/loʊ/|/ləʊ/
+heavy|/ˈhevi/|/ˈhevi/
+light|/laɪt/|/laɪt/
+hard|/hɑːrd/|/hɑːd/
+soft|/sɔːft/|/sɒft/
+smooth|/smuːð/|/smuːð/
+rough|/rʌf/|/rʌf/
+sharp|/ʃɑːrp/|/ʃɑːp/
+round|/raʊnd/|/raʊnd/
+flat|/flæt/|/flæt/
+empty|/ˈempti/|/ˈempti/
+full|/fʊl/|/fʊl/
+hot|/hɑːt/|/hɒt/
+warm|/wɔːrm/|/wɔːm/
+wet|/wet/|/wet/
+dry|/draɪ/|/draɪ/
+dark|/dɑːrk/|/dɑːk/
+bright|/braɪt/|/braɪt/
+quiet|/ˈkwaɪət/|/ˈkwaɪət/
+loud|/laʊd/|/laʊd/
+silent|/ˈsaɪlənt/|/ˈsaɪlənt/
+fast|/fæst/|/fɑːst/
+slow|/sloʊ/|/sləʊ/
+new|/nuː/|/njuː/
+ancient|/ˈeɪnʃənt/|/ˈeɪnʃənt/
+strange|/streɪndʒ/|/streɪndʒ/
+magic|/ˈmædʒɪk/|/ˈmædʒɪk/
+secret|/ˈsiːkrət/|/ˈsiːkrət/
+dangerous|/ˈdeɪndʒərəs/|/ˈdeɪndʒərəs/
+safe|/seɪf/|/seɪf/
+golden|/ˈɡoʊldən/|/ˈɡəʊldən/
+wooden|/ˈwʊdn/|/ˈwʊdn/
+true|/truː/|/truː/
+real|/ˈriːəl/|/ˈriːəl/
+whole|/hoʊl/|/həʊl/
+king|/kɪŋ/|/kɪŋ/
+queen|/kwiːn/|/kwiːn/
+prince|/prɪns/|/prɪns/
+princess|/ˈprɪnses/|/ˈprɪnses/
+knight|/naɪt/|/naɪt/
+soldier|/ˈsoʊldʒər/|/ˈsəʊldʒə/
+guard|/ɡɑːrd/|/ɡɑːd/
+servant|/ˈsɜːrvənt/|/ˈsɜːvənt/
+witch|/wɪtʃ/|/wɪtʃ/
+wizard|/ˈwɪzərd/|/ˈwɪzəd/
+giant|/ˈdʒaɪənt/|/ˈdʒaɪənt/
+fairy|/ˈferi/|/ˈfeəri/
+ghost|/ɡoʊst/|/ɡəʊst/
+monster|/ˈmɑːnstər/|/ˈmɒnstə/
+dragon|/ˈdræɡən/|/ˈdræɡən/
+hero|/ˈhɪroʊ/|/ˈhɪərəʊ/
+enemy|/ˈenəmi/|/ˈenəmi/
+thief|/θiːf/|/θiːf/
+stranger|/ˈstreɪndʒər/|/ˈstreɪndʒə/
+farmer|/ˈfɑːrmər/|/ˈfɑːmə/
+fisherman|/ˈfɪʃərmən/|/ˈfɪʃəmən/
+merchant|/ˈmɜːrtʃənt/|/ˈmɜːtʃənt/
+hunter|/ˈhʌntər/|/ˈhʌntə/
+sailor|/ˈseɪlər/|/ˈseɪlə/
+captain|/ˈkæptɪn/|/ˈkæptɪn/
+crowd|/kraʊd/|/kraʊd/
+friend|/frend/|/frend/
+neighbour|/ˈneɪbər/|/ˈneɪbə/
+parents|/ˈperənts/|/ˈpeərənts/
+husband|/ˈhʌzbənd/|/ˈhʌzbənd/
+wife|/waɪf/|/waɪf/
+son|/sʌn/|/sʌn/
+daughter|/ˈdɔːtər/|/ˈdɔːtə/
+brother|/ˈbrʌðər/|/ˈbrʌðə/
+sister|/ˈsɪstər/|/ˈsɪstə/
+grandmother|/ˈɡrænmʌðər/|/ˈɡrænmʌðə/
+grandfather|/ˈɡrænfɑːðər/|/ˈɡrænfɑːðə/
+uncle|/ˈʌŋkl/|/ˈʌŋkl/
+aunt|/ænt/|/ɑːnt/
+child|/tʃaɪld/|/tʃaɪld/
+baby|/ˈbeɪbi/|/ˈbeɪbi/
+boy|/bɔɪ/|/bɔɪ/
+girl|/ɡɜːrl/|/ɡɜːl/
+man|/mæn/|/mæn/
+woman|/ˈwʊmən/|/ˈwʊmən/
+people|/ˈpiːpl/|/ˈpiːpl/
+castle|/ˈkæsl/|/ˈkɑːsl/
+palace|/ˈpæləs/|/ˈpæləs/
+tower|/ˈtaʊər/|/ˈtaʊə/
+kingdom|/ˈkɪŋdəm/|/ˈkɪŋdəm/
+village|/ˈvɪlɪdʒ/|/ˈvɪlɪdʒ/
+town|/taʊn/|/taʊn/
+city|/ˈsɪti/|/ˈsɪti/
+cave|/keɪv/|/keɪv/
+woods|/wʊdz/|/wʊdz/
+jungle|/ˈdʒʌŋɡl/|/ˈdʒʌŋɡl/
+desert|/ˈdezərt/|/ˈdezət/
+valley|/ˈvæli/|/ˈvæli/
+cliff|/klɪf/|/klɪf/
+shore|/ʃɔːr/|/ʃɔː/
+ocean|/ˈoʊʃn/|/ˈəʊʃn/
+well|/wel/|/wel/
+path|/pæθ/|/pɑːθ/
+cottage|/ˈkɑːtɪdʒ/|/ˈkɒtɪdʒ/
+hut|/hʌt/|/hʌt/
+farm|/fɑːrm/|/fɑːm/
+barn|/bɑːrn/|/bɑːn/
+prison|/ˈprɪzn/|/ˈprɪzn/
+dungeon|/ˈdʌndʒən/|/ˈdʌndʒən/
+tunnel|/ˈtʌnl/|/ˈtʌnl/
+room|/ruːm/|/ruːm/
+hall|/hɔːl/|/hɔːl/
+world|/wɜːrld/|/wɜːld/
+land|/lænd/|/lænd/
+place|/pleɪs/|/pleɪs/
+home|/hoʊm/|/həʊm/
+time|/taɪm/|/taɪm/
+day|/deɪ/|/deɪ/
+night|/naɪt/|/naɪt/
+morning|/ˈmɔːrnɪŋ/|/ˈmɔːnɪŋ/
+evening|/ˈiːvnɪŋ/|/ˈiːvnɪŋ/
+midnight|/ˈmɪdnaɪt/|/ˈmɪdnaɪt/
+dawn|/dɔːn/|/dɔːn/
+sunset|/ˈsʌnset/|/ˈsʌnset/
+moment|/ˈmoʊmənt/|/ˈməʊmənt/
+minute|/ˈmɪnɪt/|/ˈmɪnɪt/
+hour|/ˈaʊər/|/ˈaʊə/
+week|/wiːk/|/wiːk/
+year|/jɪr/|/jɪə/
+season|/ˈsiːzn/|/ˈsiːzn/
+winter|/ˈwɪntər/|/ˈwɪntə/
+summer|/ˈsʌmər/|/ˈsʌmə/
+past|/pæst/|/pɑːst/
+future|/ˈfjuːtʃər/|/ˈfjuːtʃə/
+shadow|/ˈʃædoʊ/|/ˈʃædəʊ/
+darkness|/ˈdɑːrknəs/|/ˈdɑːknəs/
+fire|/ˈfaɪər/|/ˈfaɪə/
+flame|/fleɪm/|/fleɪm/
+smoke|/smoʊk/|/sməʊk/
+sound|/saʊnd/|/saʊnd/
+noise|/nɔɪz/|/nɔɪz/
+voice|/vɔɪs/|/vɔɪs/
+silence|/ˈsaɪləns/|/ˈsaɪləns/
+footsteps|/ˈfʊtsteps/|/ˈfʊtsteps/
+story|/ˈstɔːri/|/ˈstɔːri/
+spell|/spel/|/spel/
+curse|/kɜːrs/|/kɜːs/
+adventure|/ədˈventʃər/|/ədˈventʃə/
+journey|/ˈdʒɜːrni/|/ˈdʒɜːni/
+danger|/ˈdeɪndʒər/|/ˈdeɪndʒə/
+trouble|/ˈtrʌbl/|/ˈtrʌbl/
+problem|/ˈprɑːbləm/|/ˈprɒbləm/
+mistake|/mɪˈsteɪk/|/mɪˈsteɪk/
+courage|/ˈkɜːrɪdʒ/|/ˈkʌrɪdʒ/
+truth|/truːθ/|/truːθ/
+luck|/lʌk/|/lʌk/
+power|/ˈpaʊər/|/ˈpaʊə/
+war|/wɔːr/|/wɔː/
+peace|/piːs/|/piːs/
+death|/deθ/|/deθ/
+life|/laɪf/|/laɪf/
+mind|/maɪnd/|/maɪnd/
+idea|/aɪˈdiːə/|/aɪˈdɪə/
+plan|/plæn/|/plæn/
+reason|/ˈriːzn/|/ˈriːzn/
+gift|/ɡɪft/|/ɡɪft/
+treasure|/ˈtreʒər/|/ˈtreʒə/
+gold|/ɡoʊld/|/ɡəʊld/
+jewel|/ˈdʒuːəl/|/ˈdʒuːəl/
+crown|/kraʊn/|/kraʊn/
+sword|/sɔːrd/|/sɔːd/
+shield|/ʃiːld/|/ʃiːld/
+map|/mæp/|/mæp/
+letter|/ˈletər/|/ˈletə/
+box|/bɑːks/|/bɒks/
+bag|/bæɡ/|/bæɡ/
+shrug|/ʃrʌɡ/|/ʃrʌɡ/
+wince|/wɪns/|/wɪns/
+flinch|/flɪntʃ/|/flɪntʃ/
+grimace|/ˈɡrɪməs/|/ˈɡrɪməs/
+grin|/ɡrɪn/|/ɡrɪn/
+smirk|/smɜːrk/|/smɜːk/
+scowl|/skaʊl/|/skaʊl/
+sneer|/snɪr/|/snɪə/
+clench|/klentʃ/|/klentʃ/
+grip|/ɡrɪp/|/ɡrɪp/
+clutch|/klʌtʃ/|/klʌtʃ/
+squeeze|/skwiːz/|/skwiːz/
+stroke|/stroʊk/|/strəʊk/
+rub|/rʌb/|/rʌb/
+pat|/pæt/|/pæt/
+nudge|/nʌdʒ/|/nʌdʒ/
+shove|/ʃʌv/|/ʃʌv/
+slap|/slæp/|/slæp/
+punch|/pʌntʃ/|/pʌntʃ/
+stride|/straɪd/|/straɪd/
+pace|/peɪs/|/peɪs/
+stagger|/ˈstæɡər/|/ˈstæɡə/
+lurch|/lɜːrtʃ/|/lɜːtʃ/
+limp|/lɪmp/|/lɪmp/
+slump|/slʌmp/|/slʌmp/
+sprawl|/sprɔːl/|/sprɔːl/
+crouch|/kraʊtʃ/|/kraʊtʃ/
+huddle|/ˈhʌdl/|/ˈhʌdl/
+stretch|/stretʃ/|/stretʃ/
+straighten|/ˈstreɪtn/|/ˈstreɪtn/
+bend|/bend/|/bend/
+turn|/tɜːrn/|/tɜːn/
+twist|/twɪst/|/twɪst/
+swallow|/ˈswɑːloʊ/|/ˈswɒləʊ/
+choke|/tʃoʊk/|/tʃəʊk/
+sniff|/snɪf/|/snɪf/
+pant|/pænt/|/pænt/
+sweat|/swet/|/swet/
+bite|/baɪt/|/baɪt/
+lick|/lɪk/|/lɪk/
+chew|/tʃuː/|/tʃuː/
+sip|/sɪp/|/sɪp/
+gulp|/ɡʌlp/|/ɡʌlp/
+fidget|/ˈfɪdʒɪt/|/ˈfɪdʒɪt/
+cling|/klɪŋ/|/klɪŋ/
+embrace|/ɪmˈbreɪs/|/ɪmˈbreɪs/
+caress|/kəˈres/|/kəˈres/
+undress|/ʌnˈdres/|/ʌnˈdres/
+collapse|/kəˈlæps/|/kəˈlæps/
+faint|/feɪnt/|/feɪnt/
+murmur|/ˈmɜːrmər/|/ˈmɜːmə/
+mumble|/ˈmʌmbl/|/ˈmʌmbl/
+snap|/snæp/|/snæp/
+hiss|/hɪs/|/hɪs/
+growl|/ɡraʊl/|/ɡraʊl/
+snarl|/snɑːrl/|/snɑːl/
+bark|/bɑːrk/|/bɑːk/
+roar|/rɔːr/|/rɔː/
+groan|/ɡroʊn/|/ɡrəʊn/
+moan|/moʊn/|/məʊn/
+sob|/sɑːb/|/sɒb/
+stammer|/ˈstæmər/|/ˈstæmə/
+blurt|/blɜːrt/|/blɜːt/
+exclaim|/ɪkˈskleɪm/|/ɪkˈskleɪm/
+declare|/dɪˈkler/|/dɪˈkleə/
+announce|/əˈnaʊns/|/əˈnaʊns/
+insist|/ɪnˈsɪst/|/ɪnˈsɪst/
+admit|/ədˈmɪt/|/ədˈmɪt/
+confess|/kənˈfes/|/kənˈfes/
+deny|/dɪˈnaɪ/|/dɪˈnaɪ/
+protest|/prəˈtest/|/prəˈtest/
+argue|/ˈɑːrɡjuː/|/ˈɑːɡjuː/
+retort|/rɪˈtɔːrt/|/rɪˈtɔːt/
+demand|/dɪˈmænd/|/dɪˈmɑːnd/
+inquire|/ɪnˈkwaɪər/|/ɪnˈkwaɪə/
+suggest|/səɡˈdʒest/|/səˈdʒest/
+remark|/rɪˈmɑːrk/|/rɪˈmɑːk/
+mention|/ˈmenʃn/|/ˈmenʃn/
+add|/æd/|/æd/
+continue|/kənˈtɪnjuː/|/kənˈtɪnjuː/
+interrupt|/ˌɪntəˈrʌpt/|/ˌɪntəˈrʌpt/
+repeat|/rɪˈpiːt/|/rɪˈpiːt/
+complain|/kəmˈpleɪn/|/kəmˈpleɪn/
+grumble|/ˈɡrʌmbl/|/ˈɡrʌmbl/
+scold|/skoʊld/|/skəʊld/
+swear|/swer/|/sweə/
+plead|/pliːd/|/pliːd/
+urge|/ɜːrdʒ/|/ɜːdʒ/
+reassure|/ˌriːəˈʃʊr/|/ˌriːəˈʃʊə/
+comfort|/ˈkʌmfərt/|/ˈkʌmfət/
+apologize|/əˈpɑːlədʒaɪz/|/əˈpɒlədʒaɪz/
+thank|/θæŋk/|/θæŋk/
+greet|/ɡriːt/|/ɡriːt/
+introduce|/ˌɪntrəˈduːs/|/ˌɪntrəˈdjuːs/
+describe|/dɪˈskraɪb/|/dɪˈskraɪb/
+discuss|/dɪˈskʌs/|/dɪˈskʌs/
+gossip|/ˈɡɑːsɪp/|/ˈɡɒsɪp/
+tease|/tiːz/|/tiːz/
+mock|/mɑːk/|/mɒk/
+joke|/dʒoʊk/|/dʒəʊk/
+chuckle|/ˈtʃʌkl/|/ˈtʃʌkl/
+giggle|/ˈɡɪɡl/|/ˈɡɪɡl/
+assume|/əˈsuːm/|/əˈsjuːm/
+suppose|/səˈpoʊz/|/səˈpəʊz/
+suspect|/səˈspekt/|/səˈspekt/
+doubt|/daʊt/|/daʊt/
+recall|/rɪˈkɔːl/|/rɪˈkɔːl/
+recognize|/ˈrekəɡnaɪz/|/ˈrekəɡnaɪz/
+consider|/kənˈsɪdər/|/kənˈsɪdə/
+ponder|/ˈpɑːndər/|/ˈpɒndə/
+hesitate|/ˈhezɪteɪt/|/ˈhezɪteɪt/
+intend|/ɪnˈtend/|/ɪnˈtend/
+expect|/ɪkˈspekt/|/ɪkˈspekt/
+sense|/sens/|/sens/
+regret|/rɪˈɡret/|/rɪˈɡret/
+resent|/rɪˈzent/|/rɪˈzent/
+envy|/ˈenvi/|/ˈenvi/
+admire|/ədˈmaɪər/|/ədˈmaɪə/
+adore|/əˈdɔːr/|/əˈdɔː/
+despise|/dɪˈspaɪz/|/dɪˈspaɪz/
+dread|/dred/|/dred/
+crave|/kreɪv/|/kreɪv/
+desire|/dɪˈzaɪər/|/dɪˈzaɪə/
+mourn|/mɔːrn/|/mɔːn/
+grieve|/ɡriːv/|/ɡriːv/
+suffer|/ˈsʌfər/|/ˈsʌfə/
+endure|/ɪnˈdʊr/|/ɪnˈdjʊə/
+panic|/ˈpænɪk/|/ˈpænɪk/
+relax|/rɪˈlæks/|/rɪˈlæks/
+calm down|/ˌkɑːm ˈdaʊn/|/ˌkɑːm ˈdaʊn/
+care|/ker/|/keə/
+matter|/ˈmætər/|/ˈmætə/
+concentrate|/ˈkɑːnsntreɪt/|/ˈkɒnsntreɪt/
+focus|/ˈfoʊkəs/|/ˈfəʊkəs/
+figure out|/ˌfɪɡjər ˈaʊt/|/ˌfɪɡjə ˈaʊt/
+solve|/sɑːlv/|/sɒlv/
+prefer|/prɪˈfɜːr/|/prɪˈfɜː/
+choose|/tʃuːz/|/tʃuːz/
+judge|/dʒʌdʒ/|/dʒʌdʒ/
+blame|/bleɪm/|/bleɪm/
+forgive|/fərˈɡɪv/|/fəˈɡɪv/
+deserve|/dɪˈzɜːrv/|/dɪˈzɜːv/
+owe|/oʊ/|/əʊ/
+fancy|/ˈfænsi/|/ˈfænsi/
+betray|/bɪˈtreɪ/|/bɪˈtreɪ/
+deceive|/dɪˈsiːv/|/dɪˈsiːv/
+cheat|/tʃiːt/|/tʃiːt/
+trick|/trɪk/|/trɪk/
+convince|/kənˈvɪns/|/kənˈvɪns/
+persuade|/pərˈsweɪd/|/pəˈsweɪd/
+threaten|/ˈθretn/|/ˈθretn/
+force|/fɔːrs/|/fɔːs/
+ignore|/ɪɡˈnɔːr/|/ɪɡˈnɔː/
+avoid|/əˈvɔɪd/|/əˈvɔɪd/
+confront|/kənˈfrʌnt/|/kənˈfrʌnt/
+challenge|/ˈtʃælɪndʒ/|/ˈtʃælɪndʒ/
+defend|/dɪˈfend/|/dɪˈfend/
+accuse|/əˈkjuːz/|/əˈkjuːz/
+insult|/ɪnˈsʌlt/|/ɪnˈsʌlt/
+offend|/əˈfend/|/əˈfend/
+punish|/ˈpʌnɪʃ/|/ˈpʌnɪʃ/
+reward|/rɪˈwɔːrd/|/rɪˈwɔːd/
+command|/kəˈmænd/|/kəˈmɑːnd/
+order|/ˈɔːrdər/|/ˈɔːdə/
+invite|/ɪnˈvaɪt/|/ɪnˈvaɪt/
+accept|/əkˈsept/|/əkˈsept/
+reject|/rɪˈdʒekt/|/rɪˈdʒekt/
+abandon|/əˈbændən/|/əˈbændən/
+leave behind|/ˌliːv bɪˈhaɪnd/|/ˌliːv bɪˈhaɪnd/
+rely|/rɪˈlaɪ/|/rɪˈlaɪ/
+depend|/dɪˈpend/|/dɪˈpend/
+share|/ʃer/|/ʃeə/
+support|/səˈpɔːrt/|/səˈpɔːt/
+encourage|/ɪnˈkɜːrɪdʒ/|/ɪnˈkʌrɪdʒ/
+impress|/ɪmˈpres/|/ɪmˈpres/
+seduce|/sɪˈduːs/|/sɪˈdjuːs/
+flirt|/flɜːrt/|/flɜːt/
+date|/deɪt/|/deɪt/
+divorce|/dɪˈvɔːrs/|/dɪˈvɔːs/
+separate|/ˈsepəreɪt/|/ˈsepəreɪt/
+quarrel|/ˈkwɔːrəl/|/ˈkwɒrəl/
+struggle|/ˈstrʌɡl/|/ˈstrʌɡl/
+surrender|/səˈrendər/|/səˈrendə/
+manage|/ˈmænɪdʒ/|/ˈmænɪdʒ/
+cope|/koʊp/|/kəʊp/
+spy|/spaɪ/|/spaɪ/
+kidnap|/ˈkɪdnæp/|/ˈkɪdnæp/
+murder|/ˈmɜːrdər/|/ˈmɜːdə/
+arrest|/əˈrest/|/əˈrest/
+occur|/əˈkɜːr/|/əˈkɜː/
+vanish|/ˈvænɪʃ/|/ˈvænɪʃ/
+emerge|/ɪˈmɜːrdʒ/|/ɪˈmɜːdʒ/
+spread|/spred/|/spred/
+fade|/feɪd/|/feɪd/
+shatter|/ˈʃætər/|/ˈʃætə/
+crash|/kræʃ/|/kræʃ/
+explode|/ɪkˈsploʊd/|/ɪkˈspləʊd/
+burst|/bɜːrst/|/bɜːst/
+crack|/kræk/|/kræk/
+melt|/melt/|/melt/
+freeze|/friːz/|/friːz/
+swell|/swel/|/swel/
+shrink|/ʃrɪŋk/|/ʃrɪŋk/
+increase|/ɪnˈkriːs/|/ɪnˈkriːs/
+reduce|/rɪˈduːs/|/rɪˈdjuːs/
+remain|/rɪˈmeɪn/|/rɪˈmeɪn/
+last|/læst/|/lɑːst/
+pause|/pɔːz/|/pɔːz/
+linger|/ˈlɪŋɡər/|/ˈlɪŋɡə/
+settle|/ˈsetl/|/ˈsetl/
+develop|/dɪˈveləp/|/dɪˈveləp/
+reveal|/rɪˈviːl/|/rɪˈviːl/
+discover|/dɪˈskʌvər/|/dɪˈskʌvə/
+uncover|/ʌnˈkʌvər/|/ʌnˈkʌvə/
+conceal|/kənˈsiːl/|/kənˈsiːl/
+cover|/ˈkʌvər/|/ˈkʌvə/
+destroy|/dɪˈstrɔɪ/|/dɪˈstrɔɪ/
+damage|/ˈdæmɪdʒ/|/ˈdæmɪdʒ/
+ruin|/ˈruːɪn/|/ˈruːɪn/
+repair|/rɪˈper/|/rɪˈpeə/
+replace|/rɪˈpleɪs/|/rɪˈpleɪs/
+prepare|/prɪˈper/|/prɪˈpeə/
+arrange|/əˈreɪndʒ/|/əˈreɪndʒ/
+organize|/ˈɔːrɡənaɪz/|/ˈɔːɡənaɪz/
+prevent|/prɪˈvent/|/prɪˈvent/
+cause|/kɔːz/|/kɔːz/
+affect|/əˈfekt/|/əˈfekt/
+involve|/ɪnˈvɑːlv/|/ɪnˈvɒlv/
+include|/ɪnˈkluːd/|/ɪnˈkluːd/
+contain|/kənˈteɪn/|/kənˈteɪn/
+own|/oʊn/|/əʊn/
+earn|/ɜːrn/|/ɜːn/
+spend|/spend/|/spend/
+waste|/weɪst/|/weɪst/
+afford|/əˈfɔːrd/|/əˈfɔːd/
+borrow|/ˈbɑːroʊ/|/ˈbɒrəʊ/
+lend|/lend/|/lend/
+gaze|/ɡeɪz/|/ɡeɪz/
+glimpse|/ɡlɪmps/|/ɡlɪmps/
+squint|/skwɪnt/|/skwɪnt/
+glare|/ɡler/|/ɡleə/
+peek|/piːk/|/piːk/
+scan|/skæn/|/skæn/
+observe|/əbˈzɜːrv/|/əbˈzɜːv/
+witness|/ˈwɪtnəs/|/ˈwɪtnəs/
+examine|/ɪɡˈzæmɪn/|/ɪɡˈzæmɪn/
+inspect|/ɪnˈspekt/|/ɪnˈspekt/
+flicker|/ˈflɪkər/|/ˈflɪkə/
+gleam|/ɡliːm/|/ɡliːm/
+glitter|/ˈɡlɪtər/|/ˈɡlɪtə/
+flash|/flæʃ/|/flæʃ/
+blaze|/bleɪz/|/bleɪz/
+dim|/dɪm/|/dɪm/
+echo|/ˈekoʊ/|/ˈekəʊ/
+rustle|/ˈrʌsl/|/ˈrʌsl/
+creak|/kriːk/|/kriːk/
+rattle|/ˈrætl/|/ˈrætl/
+buzz|/bʌz/|/bʌz/
+hum|/hʌm/|/hʌm/
+slam|/slæm/|/slæm/
+bang|/bæŋ/|/bæŋ/
+crunch|/krʌntʃ/|/krʌntʃ/
+drip|/drɪp/|/drɪp/
+splash|/splæʃ/|/splæʃ/
+drift|/drɪft/|/drɪft/
+sway|/sweɪ/|/sweɪ/
+swing|/swɪŋ/|/swɪŋ/
+spin|/spɪn/|/spɪn/
+roll|/roʊl/|/rəʊl/
+bounce|/baʊns/|/baʊns/
+stink|/stɪŋk/|/stɪŋk/
+arrogant|/ˈærəɡənt/|/ˈærəɡənt/
+ambitious|/æmˈbɪʃəs/|/æmˈbɪʃəs/
+charming|/ˈtʃɑːrmɪŋ/|/ˈtʃɑːmɪŋ/
+cynical|/ˈsɪnɪkl/|/ˈsɪnɪkl/
+reckless|/ˈrekləs/|/ˈrekləs/
+cautious|/ˈkɔːʃəs/|/ˈkɔːʃəs/
+careful|/ˈkerfl/|/ˈkeəfl/
+careless|/ˈkerləs/|/ˈkeələs/
+loyal|/ˈlɔɪəl/|/ˈlɔɪəl/
+faithful|/ˈfeɪθfl/|/ˈfeɪθfl/
+modest|/ˈmɑːdɪst/|/ˈmɒdɪst/
+humble|/ˈhʌmbl/|/ˈhʌmbl/
+vain|/veɪn/|/veɪn/
+sensible|/ˈsensəbl/|/ˈsensəbl/
+sensitive|/ˈsensətɪv/|/ˈsensətɪv/
+impatient|/ɪmˈpeɪʃnt/|/ɪmˈpeɪʃnt/
+moody|/ˈmuːdi/|/ˈmuːdi/
+fierce|/fɪrs/|/fɪəs/
+ruthless|/ˈruːθləs/|/ˈruːθləs/
+cunning|/ˈkʌnɪŋ/|/ˈkʌnɪŋ/
+sly|/slaɪ/|/slaɪ/
+naive|/naɪˈiːv/|/naɪˈiːv/
+innocent|/ˈɪnəsnt/|/ˈɪnəsnt/
+mature|/məˈtʃʊr/|/məˈtʃʊə/
+reliable|/rɪˈlaɪəbl/|/rɪˈlaɪəbl/
+decent|/ˈdiːsnt/|/ˈdiːsnt/
+nasty|/ˈnæsti/|/ˈnɑːsti/
+distant|/ˈdɪstənt/|/ˈdɪstənt/
+friendly|/ˈfrendli/|/ˈfrendli/
+confident|/ˈkɑːnfɪdənt/|/ˈkɒnfɪdənt/
+independent|/ˌɪndɪˈpendənt/|/ˌɪndɪˈpendənt/
+stern|/stɜːrn/|/stɜːn/
+strict|/strɪkt/|/strɪkt/
+eccentric|/ɪkˈsentrɪk/|/ɪkˈsentrɪk/
+mysterious|/mɪˈstɪriəs/|/mɪˈstɪəriəs/
+passionate|/ˈpæʃənət/|/ˈpæʃənət/
+determined|/dɪˈtɜːrmɪnd/|/dɪˈtɜːmɪnd/
+bewildered|/bɪˈwɪldərd/|/bɪˈwɪldəd/
+desperate|/ˈdespərət/|/ˈdespərət/
+grim|/ɡrɪm/|/ɡrɪm/
+weary|/ˈwɪri/|/ˈwɪəri/
+restless|/ˈrestləs/|/ˈrestləs/
+uneasy|/ʌnˈiːzi/|/ʌnˈiːzi/
+tense|/tens/|/tens/
+startled|/ˈstɑːrtld/|/ˈstɑːtld/
+stunned|/stʌnd/|/stʌnd/
+horrified|/ˈhɔːrɪfaɪd/|/ˈhɒrɪfaɪd/
+puzzled|/ˈpʌzld/|/ˈpʌzld/
+suspicious|/səˈspɪʃəs/|/səˈspɪʃəs/
+guilty|/ˈɡɪlti/|/ˈɡɪlti/
+humiliated|/hjuːˈmɪlieɪtɪd/|/hjuːˈmɪlieɪtɪd/
+heartbroken|/ˈhɑːrtbroʊkən/|/ˈhɑːtbrəʊkən/
+devastated|/ˈdevəsteɪtɪd/|/ˈdevəsteɪtɪd/
+hopeless|/ˈhoʊpləs/|/ˈhəʊpləs/
+helpless|/ˈhelpləs/|/ˈhelpləs/
+content|/kənˈtent/|/kənˈtent/
+delighted|/dɪˈlaɪtɪd/|/dɪˈlaɪtɪd/
+thrilled|/θrɪld/|/θrɪld/
+eager|/ˈiːɡər/|/ˈiːɡə/
+amused|/əˈmjuːzd/|/əˈmjuːzd/
+irritated|/ˈɪrɪteɪtɪd/|/ˈɪrɪteɪtɪd/
+annoyed|/əˈnɔɪd/|/əˈnɔɪd/
+resentful|/rɪˈzentfl/|/rɪˈzentfl/
+indifferent|/ɪnˈdɪfrənt/|/ɪnˈdɪfrənt/
+reluctant|/rɪˈlʌktənt/|/rɪˈlʌktənt/
+willing|/ˈwɪlɪŋ/|/ˈwɪlɪŋ/
+aware|/əˈwer/|/əˈweə/
+certain|/ˈsɜːrtn/|/ˈsɜːtn/
+unsure|/ʌnˈʃʊr/|/ʌnˈʃɔː/
+drunk|/drʌŋk/|/drʌŋk/
+sober|/ˈsoʊbər/|/ˈsəʊbə/
+exhausted|/ɪɡˈzɔːstɪd/|/ɪɡˈzɔːstɪd/
+alert|/əˈlɜːrt/|/əˈlɜːt/
+numb|/nʌm/|/nʌm/
+lost|/lɔːst/|/lɒst/
+slender|/ˈslendər/|/ˈslendə/
+skinny|/ˈskɪni/|/ˈskɪni/
+plump|/plʌmp/|/plʌmp/
+stout|/staʊt/|/staʊt/
+muscular|/ˈmʌskjələr/|/ˈmʌskjələ/
+broad|/brɔːd/|/brɔːd/
+pale|/peɪl/|/peɪl/
+tanned|/tænd/|/tænd/
+freckled|/ˈfrekld/|/ˈfrekld/
+wrinkled|/ˈrɪŋkld/|/ˈrɪŋkld/
+bald|/bɔːld/|/bɔːld/
+curly|/ˈkɜːrli/|/ˈkɜːli/
+straight|/streɪt/|/streɪt/
+blond|/blɑːnd/|/blɒnd/
+gray|/ɡreɪ/|/ɡreɪ/
+bearded|/ˈbɪrdɪd/|/ˈbɪədɪd/
+elegant|/ˈelɪɡənt/|/ˈelɪɡənt/
+gorgeous|/ˈɡɔːrdʒəs/|/ˈɡɔːdʒəs/
+attractive|/əˈtræktɪv/|/əˈtræktɪv/
+scruffy|/ˈskrʌfi/|/ˈskrʌfi/
+neat|/niːt/|/niːt/
+shabby|/ˈʃæbi/|/ˈʃæbi/
+smart|/smɑːrt/|/smɑːt/
+fragile|/ˈfrædʒl/|/ˈfrædʒl/
+graceful|/ˈɡreɪsfl/|/ˈɡreɪsfl/
+clumsy|/ˈklʌmzi/|/ˈklʌmzi/
+middle-aged|/ˌmɪdl ˈeɪdʒd/|/ˌmɪdl ˈeɪdʒd/
+elderly|/ˈeldərli/|/ˈeldəli/
+gloomy|/ˈɡluːmi/|/ˈɡluːmi/
+eerie|/ˈɪri/|/ˈɪəri/
+creepy|/ˈkriːpi/|/ˈkriːpi/
+spooky|/ˈspuːki/|/ˈspuːki/
+vivid|/ˈvɪvɪd/|/ˈvɪvɪd/
+vast|/væst/|/vɑːst/
+endless|/ˈendləs/|/ˈendləs/
+remote|/rɪˈmoʊt/|/rɪˈməʊt/
+deserted|/dɪˈzɜːrtɪd/|/dɪˈzɜːtɪd/
+abandoned|/əˈbændənd/|/əˈbændənd/
+cozy|/ˈkoʊzi/|/ˈkəʊzi/
+peaceful|/ˈpiːsfl/|/ˈpiːsfl/
+still|/stɪl/|/stɪl/
+misty|/ˈmɪsti/|/ˈmɪsti/
+damp|/dæmp/|/dæmp/
+dusty|/ˈdʌsti/|/ˈdʌsti/
+filthy|/ˈfɪlθi/|/ˈfɪlθi/
+spotless|/ˈspɑːtləs/|/ˈspɒtləs/
+steep|/stiːp/|/stiːp/
+pitch-dark|/ˌpɪtʃ ˈdɑːrk/|/ˌpɪtʃ ˈdɑːk/
+brilliant|/ˈbrɪljənt/|/ˈbrɪljənt/
+icy|/ˈaɪsi/|/ˈaɪsi/
+freezing|/ˈfriːzɪŋ/|/ˈfriːzɪŋ/
+chilly|/ˈtʃɪli/|/ˈtʃɪli/
+scorching|/ˈskɔːrtʃɪŋ/|/ˈskɔːtʃɪŋ/
+stuffy|/ˈstʌfi/|/ˈstʌfi/
+fragrant|/ˈfreɪɡrənt/|/ˈfreɪɡrənt/
+rotten|/ˈrɑːtn/|/ˈrɒtn/
+luxurious|/lʌɡˈʒʊriəs/|/lʌɡˈʒʊəriəs/
+modern|/ˈmɑːdərn/|/ˈmɒdən/
+elaborate|/ɪˈlæbərət/|/ɪˈlæbərət/
+ordinary|/ˈɔːrdneri/|/ˈɔːdnri/
+familiar|/fəˈmɪliər/|/fəˈmɪliə/
+unfamiliar|/ˌʌnfəˈmɪliər/|/ˌʌnfəˈmɪliə/
+obvious|/ˈɑːbviəs/|/ˈɒbviəs/
+ridiculous|/rɪˈdɪkjələs/|/rɪˈdɪkjələs/
+absurd|/əbˈsɜːrd/|/əbˈsɜːd/
+genuine|/ˈdʒenjuɪn/|/ˈdʒenjuɪn/
+fake|/feɪk/|/feɪk/
+bizarre|/bɪˈzɑːr/|/bɪˈzɑː/
+odd|/ɑːd/|/ɒd/
+unusual|/ʌnˈjuːʒuəl/|/ʌnˈjuːʒuəl/
+typical|/ˈtɪpɪkl/|/ˈtɪpɪkl/
+awful|/ˈɔːfl/|/ˈɔːfl/
+terrible|/ˈterəbl/|/ˈterəbl/
+horrible|/ˈhɔːrəbl/|/ˈhɒrəbl/
+wonderful|/ˈwʌndərfl/|/ˈwʌndəfl/
+remarkable|/rɪˈmɑːrkəbl/|/rɪˈmɑːkəbl/
+extraordinary|/ɪkˈstrɔːrdəneri/|/ɪkˈstrɔːdnri/
+impossible|/ɪmˈpɑːsəbl/|/ɪmˈpɒsəbl/
+possible|/ˈpɑːsəbl/|/ˈpɒsəbl/
+likely|/ˈlaɪkli/|/ˈlaɪkli/
+necessary|/ˈnesəseri/|/ˈnesəseri/
+important|/ɪmˈpɔːrtnt/|/ɪmˈpɔːtnt/
+serious|/ˈsɪriəs/|/ˈsɪəriəs/
+urgent|/ˈɜːrdʒənt/|/ˈɜːdʒənt/
+private|/ˈpraɪvət/|/ˈpraɪvət/
+public|/ˈpʌblɪk/|/ˈpʌblɪk/
+precious|/ˈpreʃəs/|/ˈpreʃəs/
+worthless|/ˈwɜːrθləs/|/ˈwɜːθləs/
+fair|/fer/|/feə/
+unfair|/ʌnˈfer/|/ʌnˈfeə/
+proper|/ˈprɑːpər/|/ˈprɒpə/
+awkward|/ˈɔːkwərd/|/ˈɔːkwəd/
+pleasant|/ˈpleznt/|/ˈpleznt/
+unpleasant|/ʌnˈpleznt/|/ʌnˈpleznt/
+tough|/tʌf/|/tʌf/
+fortunate|/ˈfɔːrtʃənət/|/ˈfɔːtʃənət/
+vague|/veɪɡ/|/veɪɡ/
+clear|/klɪr/|/klɪə/
+sudden|/ˈsʌdn/|/ˈsʌdn/
+brief|/briːf/|/briːf/
+constant|/ˈkɑːnstənt/|/ˈkɒnstənt/
+previous|/ˈpriːviəs/|/ˈpriːviəs/
+final|/ˈfaɪnl/|/ˈfaɪnl/
+entire|/ɪnˈtaɪər/|/ɪnˈtaɪə/
+acquaintance|/əˈkweɪntəns/|/əˈkweɪntəns/
+colleague|/ˈkɑːliːɡ/|/ˈkɒliːɡ/
+partner|/ˈpɑːrtnər/|/ˈpɑːtnə/
+boyfriend|/ˈbɔɪfrend/|/ˈbɔɪfrend/
+girlfriend|/ˈɡɜːrlfrend/|/ˈɡɜːlfrend/
+lover|/ˈlʌvər/|/ˈlʌvə/
+fiancé|/ˌfiːɑːnˈseɪ/|/ˌfiːɒnˈseɪ/
+widow|/ˈwɪdoʊ/|/ˈwɪdəʊ/
+orphan|/ˈɔːrfn/|/ˈɔːfn/
+relative|/ˈrelətɪv/|/ˈrelətɪv/
+cousin|/ˈkʌzn/|/ˈkʌzn/
+nephew|/ˈnefjuː/|/ˈnefjuː/
+niece|/niːs/|/niːs/
+in-laws|/ˈɪn lɔːz/|/ˈɪn lɔːz/
+landlady|/ˈlændleɪdi/|/ˈlændleɪdi/
+tenant|/ˈtenənt/|/ˈtenənt/
+guest|/ɡest/|/ɡest/
+host|/hoʊst/|/həʊst/
+boss|/bɔːs/|/bɒs/
+employee|/ɪmˈplɔɪiː/|/ɪmˈplɔɪiː/
+clerk|/klɜːrk/|/klɜːk/
+waiter|/ˈweɪtər/|/ˈweɪtə/
+maid|/meɪd/|/meɪd/
+butler|/ˈbʌtlər/|/ˈbʌtlə/
+lawyer|/ˈlɔːjər/|/ˈlɔːjə/
+detective|/dɪˈtektɪv/|/dɪˈtektɪv/
+officer|/ˈɔːfɪsər/|/ˈɒfɪsə/
+journalist|/ˈdʒɜːrnəlɪst/|/ˈdʒɜːnəlɪst/
+priest|/priːst/|/priːst/
+surgeon|/ˈsɜːrdʒən/|/ˈsɜːdʒən/
+professor|/prəˈfesər/|/prəˈfesə/
+artist|/ˈɑːrtɪst/|/ˈɑːtɪst/
+writer|/ˈraɪtər/|/ˈraɪtə/
+owner|/ˈoʊnər/|/ˈəʊnə/
+leader|/ˈliːdər/|/ˈliːdə/
+rival|/ˈraɪvl/|/ˈraɪvl/
+victim|/ˈvɪktɪm/|/ˈvɪktɪm/
+suspect|/ˈsʌspekt/|/ˈsʌspekt/
+killer|/ˈkɪlər/|/ˈkɪlə/
+criminal|/ˈkrɪmɪnl/|/ˈkrɪmɪnl/
+prisoner|/ˈprɪznər/|/ˈprɪznə/
+gang|/ɡæŋ/|/ɡæŋ/
+crew|/kruː/|/kruː/
+audience|/ˈɔːdiəns/|/ˈɔːdiəns/
+generation|/ˌdʒenəˈreɪʃn/|/ˌdʒenəˈreɪʃn/
+society|/səˈsaɪəti/|/səˈsaɪəti/
+community|/kəˈmjuːnəti/|/kəˈmjuːnəti/
+emotion|/ɪˈmoʊʃn/|/ɪˈməʊʃn/
+feeling|/ˈfiːlɪŋ/|/ˈfiːlɪŋ/
+mood|/muːd/|/muːd/
+joy|/dʒɔɪ/|/dʒɔɪ/
+delight|/dɪˈlaɪt/|/dɪˈlaɪt/
+happiness|/ˈhæpinəs/|/ˈhæpinəs/
+sorrow|/ˈsɑːroʊ/|/ˈsɒrəʊ/
+grief|/ɡriːf/|/ɡriːf/
+guilt|/ɡɪlt/|/ɡɪlt/
+shame|/ʃeɪm/|/ʃeɪm/
+pride|/praɪd/|/praɪd/
+rage|/reɪdʒ/|/reɪdʒ/
+anger|/ˈæŋɡər/|/ˈæŋɡə/
+fury|/ˈfjʊri/|/ˈfjʊəri/
+jealousy|/ˈdʒeləsi/|/ˈdʒeləsi/
+anxiety|/æŋˈzaɪəti/|/æŋˈzaɪəti/
+terror|/ˈterər/|/ˈterə/
+horror|/ˈhɔːrər/|/ˈhɒrə/
+relief|/rɪˈliːf/|/rɪˈliːf/
+sympathy|/ˈsɪmpəθi/|/ˈsɪmpəθi/
+pity|/ˈpɪti/|/ˈpɪti/
+despair|/dɪˈsper/|/dɪˈspeə/
+passion|/ˈpæʃn/|/ˈpæʃn/
+affection|/əˈfekʃn/|/əˈfekʃn/
+loneliness|/ˈloʊnlinəs/|/ˈləʊnlinəs/
+suspicion|/səˈspɪʃn/|/səˈspɪʃn/
+confidence|/ˈkɑːnfɪdəns/|/ˈkɒnfɪdəns/
+respect|/rɪˈspekt/|/rɪˈspekt/
+contempt|/kənˈtempt/|/kənˈtempt/
+embarrassment|/ɪmˈbærəsmənt/|/ɪmˈbærəsmənt/
+curiosity|/ˌkjʊriˈɑːsəti/|/ˌkjʊəriˈɒsəti/
+boredom|/ˈbɔːrdəm/|/ˈbɔːdəm/
+tension|/ˈtenʃn/|/ˈtenʃn/
+nightmare|/ˈnaɪtmer/|/ˈnaɪtmeə/
+tear|/tɪr/|/tɪə/
+childhood|/ˈtʃaɪldhʊd/|/ˈtʃaɪldhʊd/
+youth|/juːθ/|/juːθ/
+marriage|/ˈmærɪdʒ/|/ˈmærɪdʒ/
+wedding|/ˈwedɪŋ/|/ˈwedɪŋ/
+funeral|/ˈfjuːnərəl/|/ˈfjuːnərəl/
+affair|/əˈfer/|/əˈfeə/
+relationship|/rɪˈleɪʃnʃɪp/|/rɪˈleɪʃnʃɪp/
+argument|/ˈɑːrɡjumənt/|/ˈɑːɡjumənt/
+conversation|/ˌkɑːnvərˈseɪʃn/|/ˌkɒnvəˈseɪʃn/
+party|/ˈpɑːrti/|/ˈpɑːti/
+career|/kəˈrɪr/|/kəˈrɪə/
+success|/səkˈses/|/səkˈses/
+failure|/ˈfeɪljər/|/ˈfeɪljə/
+accident|/ˈæksɪdənt/|/ˈæksɪdənt/
+illness|/ˈɪlnəs/|/ˈɪlnəs/
+pregnancy|/ˈpreɡnənsi/|/ˈpreɡnənsi/
+birth|/bɜːrθ/|/bɜːθ/
+grave|/ɡreɪv/|/ɡreɪv/
+inheritance|/ɪnˈherɪtəns/|/ɪnˈherɪtəns/
+debt|/det/|/det/
+wealth|/welθ/|/welθ/
+poverty|/ˈpɑːvərti/|/ˈpɒvəti/
+fortune|/ˈfɔːrtʃən/|/ˈfɔːtʃən/
+opportunity|/ˌɑːpərˈtuːnəti/|/ˌɒpəˈtjuːnəti/
+choice|/tʃɔɪs/|/tʃɔɪs/
+decision|/dɪˈsɪʒn/|/dɪˈsɪʒn/
+habit|/ˈhæbɪt/|/ˈhæbɪt/
+routine|/ruːˈtiːn/|/ruːˈtiːn/
+holiday|/ˈhɑːlədeɪ/|/ˈhɒlədeɪ/
+trip|/trɪp/|/trɪp/
+news|/nuːz/|/njuːz/
+rumor|/ˈruːmər/|/ˈruːmə/
+scandal|/ˈskændl/|/ˈskændl/
+crisis|/ˈkraɪsɪs/|/ˈkraɪsɪs/
+disaster|/dɪˈzæstər/|/dɪˈzɑːstə/
+celebration|/ˌselɪˈbreɪʃn/|/ˌselɪˈbreɪʃn/
+ceremony|/ˈserəmoʊni/|/ˈserəməʊni/
+crime|/kraɪm/|/kraɪm/
+robbery|/ˈrɑːbəri/|/ˈrɒbəri/
+theft|/θeft/|/θeft/
+fraud|/frɔːd/|/frɔːd/
+investigation|/ɪnˌvestɪˈɡeɪʃn/|/ɪnˌvestɪˈɡeɪʃn/
+evidence|/ˈevɪdəns/|/ˈevɪdəns/
+clue|/kluː/|/kluː/
+proof|/pruːf/|/pruːf/
+alibi|/ˈæləbaɪ/|/ˈæləbaɪ/
+motive|/ˈmoʊtɪv/|/ˈməʊtɪv/
+weapon|/ˈwepən/|/ˈwepən/
+gun|/ɡʌn/|/ɡʌn/
+knife|/naɪf/|/naɪf/
+bullet|/ˈbʊlɪt/|/ˈbʊlɪt/
+poison|/ˈpɔɪzn/|/ˈpɔɪzn/
+corpse|/kɔːrps/|/kɔːps/
+body|/ˈbɑːdi/|/ˈbɒdi/
+fingerprint|/ˈfɪŋɡərprɪnt/|/ˈfɪŋɡəprɪnt/
+scene|/siːn/|/siːn/
+police|/pəˈliːs/|/pəˈliːs/
+court|/kɔːrt/|/kɔːt/
+trial|/ˈtraɪəl/|/ˈtraɪəl/
+jury|/ˈdʒʊri/|/ˈdʒʊəri/
+verdict|/ˈvɜːrdɪkt/|/ˈvɜːdɪkt/
+sentence|/ˈsentəns/|/ˈsentəns/
+jail|/dʒeɪl/|/dʒeɪl/
+law|/lɔː/|/lɔː/
+justice|/ˈdʒʌstɪs/|/ˈdʒʌstɪs/
+confession|/kənˈfeʃn/|/kənˈfeʃn/
+statement|/ˈsteɪtmənt/|/ˈsteɪtmənt/
+ransom|/ˈrænsəm/|/ˈrænsəm/
+hostage|/ˈhɑːstɪdʒ/|/ˈhɒstɪdʒ/
+threat|/θret/|/θret/
+expression|/ɪkˈspreʃn/|/ɪkˈspreʃn/
+laughter|/ˈlæftər/|/ˈlɑːftə/
+gesture|/ˈdʒestʃər/|/ˈdʒestʃə/
+breath|/breθ/|/breθ/
+pulse|/pʌls/|/pʌls/
+fist|/fɪst/|/fɪst/
+palm|/pɑːm/|/pɑːm/
+jaw|/dʒɔː/|/dʒɔː/
+lap|/læp/|/læp/
+posture|/ˈpɑːstʃər/|/ˈpɒstʃə/
+tone|/toʊn/|/təʊn/
+accent|/ˈæksent/|/ˈæksent/
+fate|/feɪt/|/feɪt/
+destiny|/ˈdestəni/|/ˈdestəni/
+memory|/ˈmeməri/|/ˈmeməri/
+chance|/tʃæns/|/tʃɑːns/
+consequence|/ˈkɑːnsəkwens/|/ˈkɒnsəkwens/
+result|/rɪˈzʌlt/|/rɪˈzʌlt/
+purpose|/ˈpɜːrpəs/|/ˈpɜːpəs/
+meaning|/ˈmiːnɪŋ/|/ˈmiːnɪŋ/
+instinct|/ˈɪnstɪŋkt/|/ˈɪnstɪŋkt/
+conscience|/ˈkɑːnʃəns/|/ˈkɒnʃəns/
+soul|/soʊl/|/səʊl/
+spirit|/ˈspɪrɪt/|/ˈspɪrɪt/
+faith|/feɪθ/|/feɪθ/
+belief|/bɪˈliːf/|/bɪˈliːf/
+freedom|/ˈfriːdəm/|/ˈfriːdəm/
+loss|/lɔːs/|/lɒs/
+mercy|/ˈmɜːrsi/|/ˈmɜːsi/
+revenge|/rɪˈvendʒ/|/rɪˈvendʒ/
+sacrifice|/ˈsækrɪfaɪs/|/ˈsækrɪfaɪs/
+loyalty|/ˈlɔɪəlti/|/ˈlɔɪəlti/
+betrayal|/bɪˈtreɪəl/|/bɪˈtreɪəl/
+honor|/ˈɑːnər/|/ˈɒnə/
+dignity|/ˈdɪɡnəti/|/ˈdɪɡnəti/
+reputation|/ˌrepjuˈteɪʃn/|/ˌrepjuˈteɪʃn/
+mystery|/ˈmɪstri/|/ˈmɪstri/
+possibility|/ˌpɑːsəˈbɪləti/|/ˌpɒsəˈbɪləti/
+situation|/ˌsɪtʃuˈeɪʃn/|/ˌsɪtʃuˈeɪʃn/
+circumstance|/ˈsɜːrkəmstæns/|/ˈsɜːkəmstɑːns/
+attention|/əˈtenʃn/|/əˈtenʃn/
+effort|/ˈefərt/|/ˈefət/
+advice|/ədˈvaɪs/|/ədˈvaɪs/
+permission|/pərˈmɪʃn/|/pəˈmɪʃn/
+distance|/ˈdɪstəns/|/ˈdɪstəns/
+edge|/edʒ/|/edʒ/
+surface|/ˈsɜːrfɪs/|/ˈsɜːfɪs/
+corridor|/ˈkɔːrɪdɔːr/|/ˈkɒrɪdɔː/
+doorway|/ˈdɔːrweɪ/|/ˈdɔːweɪ/
+threshold|/ˈθreʃhoʊld/|/ˈθreʃhəʊld/
+landing|/ˈlændɪŋ/|/ˈlændɪŋ/
+cellar|/ˈselər/|/ˈselə/
+study|/ˈstʌdi/|/ˈstʌdi/
+lobby|/ˈlɑːbi/|/ˈlɒbi/
+office|/ˈɔːfɪs/|/ˈɒfɪs/
+bar|/bɑːr/|/bɑː/
+pub|/pʌb/|/pʌb/
+hotel|/hoʊˈtel/|/həʊˈtel/
+station|/ˈsteɪʃn/|/ˈsteɪʃn/
+airport|/ˈerpɔːrt/|/ˈeəpɔːt/
+cemetery|/ˈseməteri/|/ˈsemətri/
+estate|/ɪˈsteɪt/|/ɪˈsteɪt/
+mansion|/ˈmænʃn/|/ˈmænʃn/
+neighborhood|/ˈneɪbərhʊd/|/ˈneɪbəhʊd/
+suburb|/ˈsʌbɜːrb/|/ˈsʌbɜːb/
+countryside|/ˈkʌntrisaɪd/|/ˈkʌntrisaɪd/
+horizon|/həˈraɪzn/|/həˈraɪzn/
+gloom|/ɡluːm/|/ɡluːm/
+dusk|/dʌsk/|/dʌsk/
+twilight|/ˈtwaɪlaɪt/|/ˈtwaɪlaɪt/
+breeze|/briːz/|/briːz/
+scent|/sent/|/sent/
+stench|/stentʃ/|/stentʃ/
+note|/noʊt/|/nəʊt/
+diary|/ˈdaɪəri/|/ˈdaɪəri/
+photograph|/ˈfoʊtəɡræf/|/ˈfəʊtəɡrɑːf/
+bottle|/ˈbɑːtl/|/ˈbɒtl/
+dart|/dɑːrt/|/dɑːt/
+scramble|/ˈskræmbl/|/ˈskræmbl/
+hurl|/hɜːrl/|/hɜːl/
+toss|/tɔːs/|/tɒs/
+fling|/flɪŋ/|/flɪŋ/
+drag|/dræɡ/|/dræɡ/
+haul|/hɔːl/|/hɔːl/
+tug|/tʌɡ/|/tʌɡ/
+yank|/jæŋk/|/jæŋk/
+heave|/hiːv/|/hiːv/
+shuffle|/ˈʃʌfl/|/ˈʃʌfl/
+trudge|/trʌdʒ/|/trʌdʒ/
+plunge|/plʌndʒ/|/plʌndʒ/
+leap|/liːp/|/liːp/
+soar|/sɔːr/|/sɔː/
+glide|/ɡlaɪd/|/ɡlaɪd/
+hover|/ˈhʌvər/|/ˈhʌvə/
+tumble|/ˈtʌmbl/|/ˈtʌmbl/
+sprint|/sprɪnt/|/sprɪnt/
+burst in|/ˌbɜːrst ˈɪn/|/ˌbɜːst ˈɪn/
+retreat|/rɪˈtriːt/|/rɪˈtriːt/
+advance|/ədˈvæns/|/ədˈvɑːns/
+pursue|/pərˈsuː/|/pəˈsjuː/
+trail|/treɪl/|/treɪl/
+wade|/weɪd/|/weɪd/
+dive|/daɪv/|/daɪv/
+scatter|/ˈskætər/|/ˈskætə/
+gather|/ˈɡæðər/|/ˈɡæðə/
+seize|/siːz/|/siːz/
+snatch|/snætʃ/|/snætʃ/
+release|/rɪˈliːs/|/rɪˈliːs/
+fasten|/ˈfæsn/|/ˈfɑːsn/
+unlock|/ʌnˈlɑːk/|/ʌnˈlɒk/
+pack|/pæk/|/pæk/
+unpack|/ʌnˈpæk/|/ʌnˈpæk/
+blow|/bloʊ/|/bləʊ/
+sew|/soʊ/|/səʊ/
+pin|/pɪn/|/pɪn/
+crimson|/ˈkrɪmzn/|/ˈkrɪmzn/
+scarlet|/ˈskɑːrlət/|/ˈskɑːlət/
+pink|/pɪŋk/|/pɪŋk/
+purple|/ˈpɜːrpl/|/ˈpɜːpl/
+violet|/ˈvaɪələt/|/ˈvaɪələt/
+navy|/ˈneɪvi/|/ˈneɪvi/
+turquoise|/ˈtɜːrkwɔɪz/|/ˈtɜːkwɔɪz/
+emerald|/ˈemərəld/|/ˈemərəld/
+olive|/ˈɑːlɪv/|/ˈɒlɪv/
+beige|/beɪʒ/|/beɪʒ/
+ivory|/ˈaɪvəri/|/ˈaɪvəri/
+silver|/ˈsɪlvər/|/ˈsɪlvə/
+bronze|/brɑːnz/|/brɒnz/
+dull|/dʌl/|/dʌl/
+glossy|/ˈɡlɑːsi/|/ˈɡlɒsi/
+transparent|/trænsˈpærənt/|/trænsˈpærənt/
+velvet|/ˈvelvɪt/|/ˈvelvɪt/
+silky|/ˈsɪlki/|/ˈsɪlki/
+woolen|/ˈwʊlən/|/ˈwʊlən/
+marble|/ˈmɑːrbl/|/ˈmɑːbl/
+crystal|/ˈkrɪstl/|/ˈkrɪstl/
+rusty|/ˈrʌsti/|/ˈrʌsti/
+worn|/wɔːrn/|/wɔːn/
+torn|/tɔːrn/|/tɔːn/
+stained|/steɪnd/|/steɪnd/
+polished|/ˈpɑːlɪʃt/|/ˈpɒlɪʃt/
+crumpled|/ˈkrʌmpld/|/ˈkrʌmpld/
+tangled|/ˈtæŋɡld/|/ˈtæŋɡld/
+hollow|/ˈhɑːloʊ/|/ˈhɒləʊ/
+solid|/ˈsɑːlɪd/|/ˈsɒlɪd/
+thick|/θɪk/|/θɪk/
+sticky|/ˈstɪki/|/ˈstɪki/
+slippery|/ˈslɪpəri/|/ˈslɪpəri/
+brow|/braʊ/|/braʊ/
+nape|/neɪp/|/neɪp/
+eyelid|/ˈaɪlɪd/|/ˈaɪlɪd/
+pupil|/ˈpjuːpl/|/ˈpjuːpl/
+nostril|/ˈnɑːstrəl/|/ˈnɑːstrəl/
+dimple|/ˈdɪmpl/|/ˈdɪmpl/
+complexion|/kəmˈplekʃn/|/kəmˈplekʃn/
+wrinkle|/ˈrɪŋkl/|/ˈrɪŋkl/
+freckle|/ˈfrekl/|/ˈfrekl/
+beard|/bɪrd/|/bɪəd/
+mustache|/ˈmʌstæʃ/|/ˈmʌstæʃ/
+ponytail|/ˈpoʊniteɪl/|/ˈpəʊniteɪl/
+braid|/breɪd/|/breɪd/
+curl|/kɜːrl/|/kɜːl/
+figure|/ˈfɪɡjər/|/ˈfɪɡjə/
+height|/haɪt/|/haɪt/
+weight|/weɪt/|/weɪt/
+limb|/lɪm/|/lɪm/
+spine|/spaɪn/|/spaɪn/
+rib|/rɪb/|/rɪb/
+skull|/skʌl/|/skʌl/
+knuckle|/ˈnʌkl/|/ˈnʌkl/
+flesh|/fleʃ/|/fleʃ/
+vein|/veɪn/|/veɪn/
+lung|/lʌŋ/|/lʌŋ/
+belly|/ˈbeli/|/ˈbeli/
+thigh|/θaɪ/|/θaɪ/
+gust|/ɡʌst/|/ɡʌst/
+drizzle|/ˈdrɪzl/|/ˈdrɪzl/
+downpour|/ˈdaʊnpɔːr/|/ˈdaʊnpɔː/
+mist|/mɪst/|/mɪst/
+haze|/heɪz/|/heɪz/
+frost|/frɔːst/|/frɒst/
+dew|/duː/|/djuː/
+moonlight|/ˈmuːnlaɪt/|/ˈmuːnlaɪt/
+sunlight|/ˈsʌnlaɪt/|/ˈsʌnlaɪt/
+ray|/reɪ/|/reɪ/
+spark|/spɑːrk/|/spɑːk/
+ash|/æʃ/|/æʃ/
+pebble|/ˈpebl/|/ˈpebl/
+boulder|/ˈboʊldər/|/ˈbəʊldə/
+ridge|/rɪdʒ/|/rɪdʒ/
+slope|/sloʊp/|/sləʊp/
+peak|/piːk/|/piːk/
+stream|/striːm/|/striːm/
+pond|/pɑːnd/|/pɒnd/
+marsh|/mɑːrʃ/|/mɑːʃ/
+meadow|/ˈmedoʊ/|/ˈmedəʊ/
+orchard|/ˈɔːrtʃərd/|/ˈɔːtʃəd/
+vine|/vaɪn/|/vaɪn/
+thorn|/θɔːrn/|/θɔːn/
+blossom|/ˈblɑːsəm/|/ˈblɒsəm/
+petal|/ˈpetl/|/ˈpetl/
+log|/lɔːɡ/|/lɒɡ/
+trunk|/trʌŋk/|/trʌŋk/
+tide|/taɪd/|/taɪd/
+current|/ˈkɜːrənt/|/ˈkʌrənt/
+fireplace|/ˈfaɪərpleɪs/|/ˈfaɪəpleɪs/
+mantelpiece|/ˈmæntlpiːs/|/ˈmæntlpiːs/
+couch|/kaʊtʃ/|/kaʊtʃ/
+desk drawer|/ˈdesk drɔːr/|/ˈdesk drɔː/
+basket|/ˈbæskɪt/|/ˈbɑːskɪt/
+lantern|/ˈlæntərn/|/ˈlæntən/
+candlestick|/ˈkændlstɪk/|/ˈkændlstɪk/
+shutter|/ˈʃʌtər/|/ˈʃʌtə/
+windowsill|/ˈwɪndoʊsɪl/|/ˈwɪndəʊsɪl/
+banister|/ˈbænɪstər/|/ˈbænɪstə/
+latch|/lætʃ/|/lætʃ/
+hinge|/hɪndʒ/|/hɪndʒ/
+handle|/ˈhændl/|/ˈhændl/
+quilt|/kwɪlt/|/kwɪlt/
+saucer|/ˈsɔːsər/|/ˈsɔːsə/
+cutlery|/ˈkʌtləri/|/ˈkʌtləri/
+napkin|/ˈnæpkɪn/|/ˈnæpkɪn/
+newspaper|/ˈnuːzpeɪpər/|/ˈnjuːzpeɪpə/
+parcel|/ˈpɑːrsl/|/ˈpɑːsl/
+receipt|/rɪˈsiːt/|/rɪˈsiːt/
+key ring|/ˈkiː rɪŋ/|/ˈkiː rɪŋ/
+government|/ˈɡʌvərnmənt/|/ˈɡʌvənmənt/
+president|/ˈprezɪdənt/|/ˈprezɪdənt/
+prime minister|/ˌpraɪm ˈmɪnɪstər/|/ˌpraɪm ˈmɪnɪstə/
+minister|/ˈmɪnɪstər/|/ˈmɪnɪstə/
+ministry|/ˈmɪnɪstri/|/ˈmɪnɪstri/
+parliament|/ˈpɑːrləmənt/|/ˈpɑːləmənt/
+congress|/ˈkɑːŋɡrəs/|/ˈkɑːŋɡrəs/
+senator|/ˈsenətər/|/ˈsenətə/
+politician|/ˌpɑːləˈtɪʃn/|/ˌpɒləˈtɪʃn/
+election|/ɪˈlekʃn/|/ɪˈlekʃn/
+vote|/voʊt/|/vəʊt/
+voter|/ˈvoʊtər/|/ˈvəʊtə/
+candidate|/ˈkændɪdət/|/ˈkændɪdət/
+campaign|/kæmˈpeɪn/|/kæmˈpeɪn/
+policy|/ˈpɑːləsi/|/ˈpɒləsi/
+bill|/bɪl/|/bɪl/
+reform|/rɪˈfɔːrm/|/rɪˈfɔːm/
+official|/əˈfɪʃl/|/əˈfɪʃl/
+spokesperson|/ˈspoʊkspɜːrsn/|/ˈspəʊkspɜːsn/
+authority|/əˈθɔːrəti/|/əˈθɒrəti/
+administration|/ədˌmɪnɪˈstreɪʃn/|/ədˌmɪnɪˈstreɪʃn/
+opposition|/ˌɑːpəˈzɪʃn/|/ˌɒpəˈzɪʃn/
+majority|/məˈdʒɔːrəti/|/məˈdʒɒrəti/
+minority|/maɪˈnɔːrəti/|/maɪˈnɒrəti/
+citizen|/ˈsɪtɪzn/|/ˈsɪtɪzn/
+democracy|/dɪˈmɑːkrəsi/|/dɪˈmɒkrəsi/
+constitution|/ˌkɑːnstəˈtuːʃn/|/ˌkɒnstəˈtjuːʃn/
+corruption|/kəˈrʌpʃn/|/kəˈrʌpʃn/
+protest|/ˈproʊtest/|/ˈprəʊtest/
+debate|/dɪˈbeɪt/|/dɪˈbeɪt/
+elect|/ɪˈlekt/|/ɪˈlekt/
+govern|/ˈɡʌvərn/|/ˈɡʌvən/
+resign|/rɪˈzaɪn/|/rɪˈzaɪn/
+appoint|/əˈpɔɪnt/|/əˈpɔɪnt/
+approve|/əˈpruːv/|/əˈpruːv/
+ban|/bæn/|/bæn/
+pass|/pæs/|/pɑːs/
+propose|/prəˈpoʊz/|/prəˈpəʊz/
+oppose|/əˈpoʊz/|/əˈpəʊz/
+criticize|/ˈkrɪtɪsaɪz/|/ˈkrɪtɪsaɪz/
+political|/pəˈlɪtɪkl/|/pəˈlɪtɪkl/
+national|/ˈnæʃnəl/|/ˈnæʃnəl/
+local|/ˈloʊkl/|/ˈləʊkl/
+federal|/ˈfedərəl/|/ˈfedərəl/
+controversial|/ˌkɑːntrəˈvɜːrʃl/|/ˌkɒntrəˈvɜːʃl/
+economy|/ɪˈkɑːnəmi/|/ɪˈkɒnəmi/
+stock|/stɑːk/|/stɒk/
+investor|/ɪnˈvestər/|/ɪnˈvestə/
+investment|/ɪnˈvestmənt/|/ɪnˈvestmənt/
+company|/ˈkʌmpəni/|/ˈkʌmpəni/
+firm|/fɜːrm/|/fɜːm/
+corporation|/ˌkɔːrpəˈreɪʃn/|/ˌkɔːpəˈreɪʃn/
+industry|/ˈɪndəstri/|/ˈɪndəstri/
+profit|/ˈprɑːfɪt/|/ˈprɒfɪt/
+revenue|/ˈrevənuː/|/ˈrevənjuː/
+budget|/ˈbʌdʒɪt/|/ˈbʌdʒɪt/
+tax|/tæks/|/tæks/
+price|/praɪs/|/praɪs/
+cost|/kɔːst/|/kɒst/
+inflation|/ɪnˈfleɪʃn/|/ɪnˈfleɪʃn/
+interest rate|/ˈɪntrəst reɪt/|/ˈɪntrəst reɪt/
+growth|/ɡroʊθ/|/ɡrəʊθ/
+recession|/rɪˈseʃn/|/rɪˈseʃn/
+unemployment|/ˌʌnɪmˈplɔɪmənt/|/ˌʌnɪmˈplɔɪmənt/
+wage|/weɪdʒ/|/weɪdʒ/
+income|/ˈɪnkʌm/|/ˈɪnkʌm/
+trade|/treɪd/|/treɪd/
+export|/ˈekspɔːrt/|/ˈekspɔːt/
+import|/ˈɪmpɔːrt/|/ˈɪmpɔːt/
+tariff|/ˈtærɪf/|/ˈtærɪf/
+currency|/ˈkɜːrənsi/|/ˈkʌrənsi/
+consumer|/kənˈsuːmər/|/kənˈsjuːmə/
+supply|/səˈplaɪ/|/səˈplaɪ/
+deal|/diːl/|/diːl/
+merger|/ˈmɜːrdʒər/|/ˈmɜːdʒə/
+bankruptcy|/ˈbæŋkrʌptsi/|/ˈbæŋkrʌptsi/
+startup|/ˈstɑːrtʌp/|/ˈstɑːtʌp/
+CEO|/ˌsiː iː ˈoʊ/|/ˌsiː iː ˈəʊ/
+invest|/ɪnˈvest/|/ɪnˈvest/
+decline|/dɪˈklaɪn/|/dɪˈklaɪn/
+boost|/buːst/|/buːst/
+hire|/ˈhaɪər/|/ˈhaɪə/
+launch|/lɔːntʃ/|/lɔːntʃ/
+economic|/ˌekəˈnɑːmɪk/|/ˌekəˈnɒmɪk/
+financial|/faɪˈnænʃl/|/faɪˈnænʃl/
+global|/ˈɡloʊbl/|/ˈɡləʊbl/
+profitable|/ˈprɑːfɪtəbl/|/ˈprɒfɪtəbl/
+country|/ˈkʌntri/|/ˈkʌntri/
+nation|/ˈneɪʃn/|/ˈneɪʃn/
+border|/ˈbɔːrdər/|/ˈbɔːdə/
+region|/ˈriːdʒən/|/ˈriːdʒən/
+capital|/ˈkæpɪtl/|/ˈkæpɪtl/
+summit|/ˈsʌmɪt/|/ˈsʌmɪt/
+treaty|/ˈtriːti/|/ˈtriːti/
+agreement|/əˈɡriːmənt/|/əˈɡriːmənt/
+alliance|/əˈlaɪəns/|/əˈlaɪəns/
+ally|/ˈælaɪ/|/ˈælaɪ/
+embassy|/ˈembəsi/|/ˈembəsi/
+ambassador|/æmˈbæsədər/|/æmˈbæsədə/
+diplomat|/ˈdɪpləmæt/|/ˈdɪpləmæt/
+sanction|/ˈsæŋkʃn/|/ˈsæŋkʃn/
+conflict|/ˈkɑːnflɪkt/|/ˈkɒnflɪkt/
+troops|/truːps/|/truːps/
+military|/ˈmɪləteri/|/ˈmɪlətri/
+army|/ˈɑːrmi/|/ˈɑːmi/
+bomb|/bɑːm/|/bɒm/
+missile|/ˈmɪsl/|/ˈmɪsl/
+ceasefire|/ˈsiːsfaɪər/|/ˈsiːsfaɪə/
+refugee|/ˌrefjuˈdʒiː/|/ˌrefjuˈdʒiː/
+immigrant|/ˈɪmɪɡrənt/|/ˈɪmɪɡrənt/
+terrorism|/ˈterərɪzəm/|/ˈterərɪzəm/
+casualty|/ˈkæʒuəlti/|/ˈkæʒuəlti/
+negotiation|/nɪˌɡoʊʃiˈeɪʃn/|/nɪˌɡəʊʃiˈeɪʃn/
+aid|/eɪd/|/eɪd/
+invade|/ɪnˈveɪd/|/ɪnˈveɪd/
+negotiate|/nɪˈɡoʊʃieɪt/|/nɪˈɡəʊʃieɪt/
+withdraw|/wɪðˈdrɔː/|/wɪðˈdrɔː/
+condemn|/kənˈdem/|/kənˈdem/
+international|/ˌɪntərˈnæʃnəl/|/ˌɪntəˈnæʃnəl/
+foreign|/ˈfɔːrən/|/ˈfɒrən/
+domestic|/dəˈmestɪk/|/dəˈmestɪk/
+nuclear|/ˈnuːkliər/|/ˈnjuːkliə/
+incident|/ˈɪnsɪdənt/|/ˈɪnsɪdənt/
+shooting|/ˈʃuːtɪŋ/|/ˈʃuːtɪŋ/
+assault|/əˈsɔːlt/|/əˈsɔːlt/
+scam|/skæm/|/skæm/
+drug|/drʌɡ/|/drʌɡ/
+prosecutor|/ˈprɑːsɪkjuːtər/|/ˈprɒsɪkjuːtə/
+defendant|/dɪˈfendənt/|/dɪˈfendənt/
+fine|/faɪn/|/faɪn/
+security|/sɪˈkjʊrəti/|/sɪˈkjʊərəti/
+safety|/ˈseɪfti/|/ˈseɪfti/
+investigate|/ɪnˈvestɪɡeɪt/|/ɪnˈvestɪɡeɪt/
+convict|/kənˈvɪkt/|/kənˈvɪkt/
+injure|/ˈɪndʒər/|/ˈɪndʒə/
+rob|/rɑːb/|/rɒb/
+allege|/əˈledʒ/|/əˈledʒ/
+illegal|/ɪˈliːɡl/|/ɪˈliːɡl/
+legal|/ˈliːɡl/|/ˈliːɡl/
+violent|/ˈvaɪələnt/|/ˈvaɪələnt/
+fatal|/ˈfeɪtl/|/ˈfeɪtl/
+missing|/ˈmɪsɪŋ/|/ˈmɪsɪŋ/
+population|/ˌpɑːpjuˈleɪʃn/|/ˌpɒpjuˈleɪʃn/
+resident|/ˈrezɪdənt/|/ˈrezɪdənt/
+housing|/ˈhaʊzɪŋ/|/ˈhaʊzɪŋ/
+education|/ˌedʒuˈkeɪʃn/|/ˌedʒuˈkeɪʃn/
+student|/ˈstuːdnt/|/ˈstjuːdnt/
+healthcare|/ˈhelθker/|/ˈhelθkeə/
+welfare|/ˈwelfer/|/ˈwelfeə/
+pension|/ˈpenʃn/|/ˈpenʃn/
+inequality|/ˌɪnɪˈkwɑːləti/|/ˌɪnɪˈkwɒləti/
+rights|/raɪts/|/raɪts/
+gender|/ˈdʒendər/|/ˈdʒendə/
+equality|/iˈkwɑːləti/|/iˈkwɒləti/
+discrimination|/dɪˌskrɪmɪˈneɪʃn/|/dɪˌskrɪmɪˈneɪʃn/
+strike|/straɪk/|/straɪk/
+union|/ˈjuːniən/|/ˈjuːniən/
+worker|/ˈwɜːrkər/|/ˈwɜːkə/
+survey|/ˈsɜːrveɪ/|/ˈsɜːveɪ/
+report|/rɪˈpɔːrt/|/rɪˈpɔːt/
+statistics|/stəˈtɪstɪks/|/stəˈtɪstɪks/
+percent|/pərˈsent/|/pəˈsent/
+average|/ˈævərɪdʒ/|/ˈævərɪdʒ/
+trend|/trend/|/trend/
+issue|/ˈɪʃuː/|/ˈɪʃuː/
+impact|/ˈɪmpækt/|/ˈɪmpækt/
+traffic|/ˈtræfɪk/|/ˈtræfɪk/
+transport|/ˈtrænspɔːrt/|/ˈtrænspɔːt/
+tourism|/ˈtʊrɪzəm/|/ˈtʊərɪzəm/
+festival|/ˈfestɪvl/|/ˈfestɪvl/
+celebrity|/səˈlebrəti/|/səˈlebrəti/
+improve|/ɪmˈpruːv/|/ɪmˈpruːv/
+provide|/prəˈvaɪd/|/prəˈvaɪd/
+claim|/kleɪm/|/kleɪm/
+estimate|/ˈestɪmeɪt/|/ˈestɪmeɪt/
+urban|/ˈɜːrbən/|/ˈɜːbən/
+rural|/ˈrʊrəl/|/ˈrʊərəl/
+social|/ˈsoʊʃl/|/ˈsəʊʃl/
+affordable|/əˈfɔːrdəbl/|/əˈfɔːdəbl/
+science|/ˈsaɪəns/|/ˈsaɪəns/
+scientist|/ˈsaɪəntɪst/|/ˈsaɪəntɪst/
+research|/ˈriːsɜːrtʃ/|/ˈriːsɜːtʃ/
+researcher|/ˈriːsɜːrtʃər/|/ˈriːsɜːtʃə/
+discovery|/dɪˈskʌvəri/|/dɪˈskʌvəri/
+experiment|/ɪkˈsperɪmənt/|/ɪkˈsperɪmənt/
+data|/ˈdeɪtə/|/ˈdeɪtə/
+technology|/tekˈnɑːlədʒi/|/tekˈnɒlədʒi/
+artificial intelligence|/ˌɑːrtɪfɪʃl ɪnˈtelɪdʒəns/|/ˌɑːtɪfɪʃl ɪnˈtelɪdʒəns/
+software|/ˈsɔːftwer/|/ˈsɒftweə/
+device|/dɪˈvaɪs/|/dɪˈvaɪs/
+internet|/ˈɪntərnet/|/ˈɪntənet/
+social media|/ˌsoʊʃl ˈmiːdiə/|/ˌsəʊʃl ˈmiːdiə/
+user|/ˈjuːzər/|/ˈjuːzə/
+privacy|/ˈpraɪvəsi/|/ˈpraɪvəsi/
+hacker|/ˈhækər/|/ˈhækə/
+cyberattack|/ˈsaɪbərətæk/|/ˈsaɪbərətæk/
+space|/speɪs/|/speɪs/
+satellite|/ˈsætəlaɪt/|/ˈsætəlaɪt/
+rocket|/ˈrɑːkɪt/|/ˈrɒkɪt/
+planet|/ˈplænɪt/|/ˈplænɪt/
+disease|/dɪˈziːz/|/dɪˈziːz/
+virus|/ˈvaɪrəs/|/ˈvaɪrəs/
+vaccine|/vækˈsiːn/|/vækˈsiːn/
+outbreak|/ˈaʊtbreɪk/|/ˈaʊtbreɪk/
+pandemic|/pænˈdemɪk/|/pænˈdemɪk/
+infection|/ɪnˈfekʃn/|/ɪnˈfekʃn/
+treatment|/ˈtriːtmənt/|/ˈtriːtmənt/
+cancer|/ˈkænsər/|/ˈkænsə/
+symptom|/ˈsɪmptəm/|/ˈsɪmptəm/
+test|/test/|/test/
+treat|/triːt/|/triːt/
+digital|/ˈdɪdʒɪtl/|/ˈdɪdʒɪtl/
+online|/ˌɑːnˈlaɪn/|/ˌɒnˈlaɪn/
+medical|/ˈmedɪkl/|/ˈmedɪkl/
+scientific|/ˌsaɪənˈtɪfɪk/|/ˌsaɪənˈtɪfɪk/
+effective|/ɪˈfektɪv/|/ɪˈfektɪv/
+environment|/ɪnˈvaɪrənmənt/|/ɪnˈvaɪrənmənt/
+climate change|/ˈklaɪmət tʃeɪndʒ/|/ˈklaɪmət tʃeɪndʒ/
+global warming|/ˌɡloʊbl ˈwɔːrmɪŋ/|/ˌɡləʊbl ˈwɔːmɪŋ/
+pollution|/pəˈluːʃn/|/pəˈluːʃn/
+emission|/iˈmɪʃn/|/iˈmɪʃn/
+carbon|/ˈkɑːrbən/|/ˈkɑːbən/
+energy|/ˈenərdʒi/|/ˈenədʒi/
+renewable energy|/rɪˌnuːəbl ˈenərdʒi/|/rɪˌnjuːəbl ˈenədʒi/
+fuel|/ˈfjuːəl/|/ˈfjuːəl/
+plastic|/ˈplæstɪk/|/ˈplæstɪk/
+recycling|/riːˈsaɪklɪŋ/|/riːˈsaɪklɪŋ/
+wildlife|/ˈwaɪldlaɪf/|/ˈwaɪldlaɪf/
+species|/ˈspiːʃiːz/|/ˈspiːʃiːz/
+drought|/draʊt/|/draʊt/
+flood|/flʌd/|/flʌd/
+typhoon|/taɪˈfuːn/|/taɪˈfuːn/
+earthquake|/ˈɜːrθkweɪk/|/ˈɜːθkweɪk/
+landslide|/ˈlændslaɪd/|/ˈlændslaɪd/
+wildfire|/ˈwaɪldfaɪər/|/ˈwaɪldfaɪə/
+heatwave|/ˈhiːtweɪv/|/ˈhiːtweɪv/
+temperature|/ˈtemprətʃər/|/ˈtemprətʃə/
+evacuation|/ɪˌvækjuˈeɪʃn/|/ɪˌvækjuˈeɪʃn/
+survivor|/sərˈvaɪvər/|/səˈvaɪvə/
+death toll|/ˈdeθ toʊl/|/ˈdeθ təʊl/
+evacuate|/ɪˈvækjueɪt/|/ɪˈvækjueɪt/
+survive|/sərˈvaɪv/|/səˈvaɪv/
+environmental|/ɪnˌvaɪrənˈmentl/|/ɪnˌvaɪrənˈmentl/
+severe|/sɪˈvɪr/|/sɪˈvɪə/
+extreme|/ɪkˈstriːm/|/ɪkˈstriːm/
+sustainable|/səˈsteɪnəbl/|/səˈsteɪnəbl/
+endangered|/ɪnˈdeɪndʒərd/|/ɪnˈdeɪndʒəd/
+headline|/ˈhedlaɪn/|/ˈhedlaɪn/
+article|/ˈɑːrtɪkl/|/ˈɑːtɪkl/
+reporter|/rɪˈpɔːrtər/|/rɪˈpɔːtə/
+editor|/ˈedɪtər/|/ˈedɪtə/
+source|/sɔːrs/|/sɔːs/
+interview|/ˈɪntərvjuː/|/ˈɪntəvjuː/
+press conference|/ˈpres ˌkɑːnfərəns/|/ˈpres ˌkɒnfərəns/
+announcement|/əˈnaʊnsmənt/|/əˈnaʊnsmənt/
+update|/ˈʌpdeɪt/|/ˈʌpdeɪt/
+coverage|/ˈkʌvərɪdʒ/|/ˈkʌvərɪdʒ/
+broadcast|/ˈbrɔːdkæst/|/ˈbrɔːdkɑːst/
+opinion|/əˈpɪnjən/|/əˈpɪnjən/
+expert|/ˈekspɜːrt/|/ˈekspɜːt/
+analyst|/ˈænəlɪst/|/ˈænəlɪst/
+critic|/ˈkrɪtɪk/|/ˈkrɪtɪk/
+quote|/kwoʊt/|/kwəʊt/
+fake news|/ˌfeɪk ˈnuːz/|/ˌfeɪk ˈnjuːz/
+controversy|/ˈkɑːntrəvɜːrsi/|/ˈkɒntrəvɜːsi/
+response|/rɪˈspɑːns/|/rɪˈspɒns/
+reaction|/riˈækʃn/|/riˈækʃn/
+confirm|/kənˈfɜːrm/|/kənˈfɜːm/
+state|/steɪt/|/steɪt/
+respond|/rɪˈspɑːnd/|/rɪˈspɒnd/
+comment|/ˈkɑːment/|/ˈkɒment/
+publish|/ˈpʌblɪʃ/|/ˈpʌblɪʃ/
+highlight|/ˈhaɪlaɪt/|/ˈhaɪlaɪt/
+stress|/stres/|/stres/
+according|/əˈkɔːrdɪŋ/|/əˈkɔːdɪŋ/
+anonymous|/əˈnɑːnɪməs/|/əˈnɒnɪməs/
+recent|/ˈriːsnt/|/ˈriːsnt/
+latest|/ˈleɪtɪst/|/ˈleɪtɪst/
+breaking|/ˈbreɪkɪŋ/|/ˈbreɪkɪŋ/
+significant|/sɪɡˈnɪfɪkənt/|/sɪɡˈnɪfɪkənt/
+major|/ˈmeɪdʒər/|/ˈmeɪdʒə/
+cook|/kʊk/|/kʊk/
+slice|/slaɪs/|/slaɪs/
+dice|/daɪs/|/daɪs/
+mince|/mɪns/|/mɪns/
+grate|/ɡreɪt/|/ɡreɪt/
+shred|/ʃred/|/ʃred/
+carve|/kɑːrv/|/kɑːv/
+mash|/mæʃ/|/mæʃ/
+knead|/niːd/|/niːd/
+mix|/mɪks/|/mɪks/
+beat|/biːt/|/biːt/
+blend|/blend/|/blend/
+bake|/beɪk/|/beɪk/
+roast|/roʊst/|/rəʊst/
+toast|/toʊst/|/təʊst/
+simmer|/ˈsɪmər/|/ˈsɪmə/
+stew|/stuː/|/stjuː/
+stir-fry|/ˈstɜːr fraɪ/|/ˈstɜː fraɪ/
+deep-fry|/ˌdiːp ˈfraɪ/|/ˌdiːp ˈfraɪ/
+poach|/poʊtʃ/|/pəʊtʃ/
+marinate|/ˈmærɪneɪt/|/ˈmærɪneɪt/
+sprinkle|/ˈsprɪŋkl/|/ˈsprɪŋkl/
+strain|/streɪn/|/streɪn/
+heat|/hiːt/|/hiːt/
+reheat|/ˌriːˈhiːt/|/ˌriːˈhiːt/
+defrost|/ˌdiːˈfrɔːst/|/ˌdiːˈfrɒst/
+chill|/tʃɪl/|/tʃɪl/
+measure|/ˈmeʒər/|/ˈmeʒə/
+weigh|/weɪ/|/weɪ/
+serve|/sɜːrv/|/sɜːv/
+garnish|/ˈɡɑːrnɪʃ/|/ˈɡɑːnɪʃ/
+dip|/dɪp/|/dɪp/
+soak|/soʊk/|/səʊk/
+overcook|/ˌoʊvərˈkʊk/|/ˌəʊvəˈkʊk/
+nibble|/ˈnɪbl/|/ˈnɪbl/
+munch|/mʌntʃ/|/mʌntʃ/
+slurp|/slɜːrp/|/slɜːp/
+devour|/dɪˈvaʊər/|/dɪˈvaʊə/
+feed|/fiːd/|/fiːd/
+dine|/daɪn/|/daɪn/
+eat out|/ˌiːt ˈaʊt/|/ˌiːt ˈaʊt/
+skip|/skɪp/|/skɪp/
+digest|/daɪˈdʒest/|/daɪˈdʒest/
+spill|/spɪl/|/spɪl/
+suck|/sʌk/|/sʌk/
+fill up|/ˌfɪl ˈʌp/|/ˌfɪl ˈʌp/
+cut down on|/ˌkʌt ˈdaʊn ɑːn/|/ˌkʌt ˈdaʊn ɒn/
+set the table|/ˌset ðə ˈteɪbl/|/ˌset ðə ˈteɪbl/
+clear the table|/ˌklɪr ðə ˈteɪbl/|/ˌklɪə ðə ˈteɪbl/
+do the dishes|/ˌduː ðə ˈdɪʃɪz/|/ˌduː ðə ˈdɪʃɪz/
+make the bed|/ˌmeɪk ðə ˈbed/|/ˌmeɪk ðə ˈbed/
+do the laundry|/ˌduː ðə ˈlɔːndri/|/ˌduː ðə ˈlɔːndri/
+hang out|/ˌhæŋ ˈaʊt/|/ˌhæŋ ˈaʊt/
+put away|/ˌpʊt əˈweɪ/|/ˌpʊt əˈweɪ/
+throw away|/ˌθroʊ əˈweɪ/|/ˌθrəʊ əˈweɪ/
+take out|/ˌteɪk ˈaʊt/|/ˌteɪk ˈaʊt/
+recycle|/ˌriːˈsaɪkl/|/ˌriːˈsaɪkl/
+polish|/ˈpɑːlɪʃ/|/ˈpɒlɪʃ/
+mend|/mend/|/mend/
+knit|/nɪt/|/nɪt/
+declutter|/ˌdiːˈklʌtər/|/ˌdiːˈklʌtə/
+unplug|/ˌʌnˈplʌɡ/|/ˌʌnˈplʌɡ/
+store|/stɔːr/|/stɔː/
+sort|/sɔːrt/|/sɔːt/
+label|/ˈleɪbl/|/ˈleɪbl/
+refill|/ˌriːˈfɪl/|/ˌriːˈfɪl/
+clean up|/ˌkliːn ˈʌp/|/ˌkliːn ˈʌp/
+wash up|/ˌwɑːʃ ˈʌp/|/ˌwɒʃ ˈʌp/
+wring|/rɪŋ/|/rɪŋ/
+air out|/ˌer ˈaʊt/|/ˌeə ˈaʊt/
+mow|/moʊ/|/məʊ/
+rake|/reɪk/|/reɪk/
+plant|/plænt/|/plɑːnt/
+weed|/wiːd/|/wiːd/
+trim|/trɪm/|/trɪm/
+lock up|/ˌlɑːk ˈʌp/|/ˌlɒk ˈʌp/
+switch on|/ˌswɪtʃ ˈɑːn/|/ˌswɪtʃ ˈɒn/
+switch off|/ˌswɪtʃ ˈɔːf/|/ˌswɪtʃ ˈɒf/
+set|/set/|/set/
+babysit|/ˈbeɪbisɪt/|/ˈbeɪbisɪt/
+look after|/ˌlʊk ˈæftər/|/ˌlʊk ˈɑːftə/
+take care of|/ˌteɪk ˈker əv/|/ˌteɪk ˈkeə əv/
+decorate|/ˈdekəreɪt/|/ˈdekəreɪt/
+move in|/ˌmuːv ˈɪn/|/ˌmuːv ˈɪn/
+move out|/ˌmuːv ˈaʊt/|/ˌmuːv ˈaʊt/
+wake up|/ˌweɪk ˈʌp/|/ˌweɪk ˈʌp/
+get up|/ˌɡet ˈʌp/|/ˌɡet ˈʌp/
+oversleep|/ˌoʊvərˈsliːp/|/ˌəʊvəˈsliːp/
+sleep in|/ˌsliːp ˈɪn/|/ˌsliːp ˈɪn/
+stay up|/ˌsteɪ ˈʌp/|/ˌsteɪ ˈʌp/
+fall asleep|/ˌfɔːl əˈsliːp/|/ˌfɔːl əˈsliːp/
+nap|/næp/|/næp/
+snore|/snɔːr/|/snɔː/
+floss|/flɔːs/|/flɒs/
+shave|/ʃeɪv/|/ʃeɪv/
+bathe|/beɪð/|/beɪð/
+moisturize|/ˈmɔɪstʃəraɪz/|/ˈmɔɪstʃəraɪz/
+get dressed|/ˌɡet ˈdrest/|/ˌɡet ˈdrest/
+get changed|/ˌɡet ˈtʃeɪndʒd/|/ˌɡet ˈtʃeɪndʒd/
+zip|/zɪp/|/zɪp/
+untie|/ʌnˈtaɪ/|/ʌnˈtaɪ/
+dye|/daɪ/|/daɪ/
+exercise|/ˈeksərsaɪz/|/ˈeksəsaɪz/
+jog|/dʒɑːɡ/|/dʒɒɡ/
+warm up|/ˌwɔːrm ˈʌp/|/ˌwɔːm ˈʌp/
+rest|/rest/|/rest/
+lie down|/ˌlaɪ ˈdaʊn/|/ˌlaɪ ˈdaʊn/
+sneeze|/sniːz/|/sniːz/
+scratch|/skrætʃ/|/skrætʃ/
+itch|/ɪtʃ/|/ɪtʃ/
+ache|/eɪk/|/eɪk/
+heal|/hiːl/|/hiːl/
+throw up|/ˌθroʊ ˈʌp/|/ˌθrəʊ ˈʌp/
+sprain|/spreɪn/|/spreɪn/
+lose weight|/ˌluːz ˈweɪt/|/ˌluːz ˈweɪt/
+put on weight|/ˌpʊt ɑːn ˈweɪt/|/ˌpʊt ɒn ˈweɪt/
+diet|/ˈdaɪət/|/ˈdaɪət/
+get on|/ˌɡet ˈɑːn/|/ˌɡet ˈɒn/
+get off|/ˌɡet ˈɔːf/|/ˌɡet ˈɒf/
+get in|/ˌɡet ˈɪn/|/ˌɡet ˈɪn/
+get out of|/ˌɡet ˈaʊt əv/|/ˌɡet ˈaʊt əv/
+miss|/mɪs/|/mɪs/
+board|/bɔːrd/|/bɔːd/
+depart|/dɪˈpɑːrt/|/dɪˈpɑːt/
+steer|/stɪr/|/stɪə/
+speed up|/ˌspiːd ˈʌp/|/ˌspiːd ˈʌp/
+slow down|/ˌsloʊ ˈdaʊn/|/ˌsləʊ ˈdaʊn/
+overtake|/ˌoʊvərˈteɪk/|/ˌəʊvəˈteɪk/
+reverse|/rɪˈvɜːrs/|/rɪˈvɜːs/
+pull over|/ˌpʊl ˈoʊvər/|/ˌpʊl ˈəʊvə/
+drop off|/ˌdrɑːp ˈɔːf/|/ˌdrɒp ˈɒf/
+queue|/kjuː/|/kjuː/
+line up|/ˌlaɪn ˈʌp/|/ˌlaɪn ˈʌp/
+stroll|/stroʊl/|/strəʊl/
+hike|/haɪk/|/haɪk/
+cycle|/ˈsaɪkl/|/ˈsaɪkl/
+pedal|/ˈpedl/|/ˈpedl/
+sail|/seɪl/|/seɪl/
+row|/roʊ/|/rəʊ/
+deliver|/dɪˈlɪvər/|/dɪˈlɪvə/
+navigate|/ˈnævɪɡeɪt/|/ˈnævɪɡeɪt/
+set off|/ˌset ˈɔːf/|/ˌset ˈɒf/
+come back|/ˌkʌm ˈbæk/|/ˌkʌm ˈbæk/
+go out|/ˌɡoʊ ˈaʊt/|/ˌɡəʊ ˈaʊt/
+turn around|/ˌtɜːrn əˈraʊnd/|/ˌtɜːn əˈraʊnd/
+look for|/ˈlʊk fɔːr/|/ˈlʊk fɔː/
+find out|/ˌfaɪnd ˈaʊt/|/ˌfaɪnd ˈaʊt/
+check in|/ˌtʃek ˈɪn/|/ˌtʃek ˈɪn/
+check out|/ˌtʃek ˈaʊt/|/ˌtʃek ˈaʊt/
+book|/bʊk/|/bʊk/
+reserve|/rɪˈzɜːrv/|/rɪˈzɜːv/
+cancel|/ˈkænsl/|/ˈkænsl/
+postpone|/poʊstˈpoʊn/|/pəʊstˈpəʊn/
+explore|/ɪkˈsplɔːr/|/ɪkˈsplɔː/
+sightsee|/ˈsaɪtsiː/|/ˈsaɪtsiː/
+dial|/ˈdaɪəl/|/ˈdaɪəl/
+hang up|/ˌhæŋ ˈʌp/|/ˌhæŋ ˈʌp/
+call back|/ˌkɔːl ˈbæk/|/ˌkɔːl ˈbæk/
+text|/tekst/|/tekst/
+email|/ˈiːmeɪl/|/ˈiːmeɪl/
+chat|/tʃæt/|/tʃæt/
+mute|/mjuːt/|/mjuːt/
+scroll|/skroʊl/|/skrəʊl/
+swipe|/swaɪp/|/swaɪp/
+click|/klɪk/|/klɪk/
+log in|/ˌlɔːɡ ˈɪn/|/ˌlɒɡ ˈɪn/
+log out|/ˌlɔːɡ ˈaʊt/|/ˌlɒɡ ˈaʊt/
+sign up|/ˌsaɪn ˈʌp/|/ˌsaɪn ˈʌp/
+upload|/ˌʌpˈloʊd/|/ˌʌpˈləʊd/
+post|/poʊst/|/pəʊst/
+block|/blɑːk/|/blɒk/
+delete|/dɪˈliːt/|/dɪˈliːt/
+copy|/ˈkɑːpi/|/ˈkɒpi/
+paste|/peɪst/|/peɪst/
+print|/prɪnt/|/prɪnt/
+update|/ˌʌpˈdeɪt/|/ˌʌpˈdeɪt/
+install|/ɪnˈstɔːl/|/ɪnˈstɔːl/
+restart|/ˌriːˈstɑːrt/|/ˌriːˈstɑːt/
+subscribe|/səbˈskraɪb/|/səbˈskraɪb/
+record|/rɪˈkɔːrd/|/rɪˈkɔːd/
+film|/fɪlm/|/fɪlm/
+zoom in|/ˌzuːm ˈɪn/|/ˌzuːm ˈɪn/
+edit|/ˈedɪt/|/ˈedɪt/
+crop|/krɑːp/|/krɒp/
+forward|/ˈfɔːrwərd/|/ˈfɔːwəd/
+attach|/əˈtætʃ/|/əˈtætʃ/
+translate|/trænsˈleɪt/|/trænsˈleɪt/
+pronounce|/prəˈnaʊns/|/prəˈnaʊns/
+charge up|/ˌtʃɑːrdʒ ˈʌp/|/ˌtʃɑːdʒ ˈʌp/
+back up|/ˌbæk ˈʌp/|/ˌbæk ˈʌp/
+work|/wɜːrk/|/wɜːk/
+revise|/rɪˈvaɪz/|/rɪˈvaɪz/
+memorize|/ˈmeməraɪz/|/ˈmeməraɪz/
+practise|/ˈpræktɪs/|/ˈpræktɪs/
+review|/rɪˈvjuː/|/rɪˈvjuː/
+note down|/ˌnoʊt ˈdaʊn/|/ˌnəʊt ˈdaʊn/
+underline|/ˌʌndərˈlaɪn/|/ˌʌndəˈlaɪn/
+erase|/ɪˈreɪs/|/ɪˈreɪz/
+calculate|/ˈkælkjuleɪt/|/ˈkælkjuleɪt/
+count|/kaʊnt/|/kaʊnt/
+check|/tʃek/|/tʃek/
+correct|/kəˈrekt/|/kəˈrekt/
+mark|/mɑːrk/|/mɑːk/
+graduate|/ˈɡrædʒueɪt/|/ˈɡrædʒueɪt/
+enroll|/ɪnˈroʊl/|/ɪnˈrəʊl/
+attend|/əˈtend/|/əˈtend/
+present|/prɪˈzent/|/prɪˈzent/
+submit|/səbˈmɪt/|/səbˈmɪt/
+hand in|/ˌhænd ˈɪn/|/ˌhænd ˈɪn/
+employ|/ɪmˈplɔɪ/|/ɪmˈplɔɪ/
+quit|/kwɪt/|/kwɪt/
+retire|/rɪˈtaɪər/|/rɪˈtaɪə/
+promote|/prəˈmoʊt/|/prəˈməʊt/
+lead|/liːd/|/liːd/
+assign|/əˈsaɪn/|/əˈsaɪn/
+schedule|/ˈskedʒuːl/|/ˈskedʒuːl/
+supervise|/ˈsuːpərvaɪz/|/ˈsuːpəvaɪz/
+cooperate|/koʊˈɑːpəreɪt/|/kəʊˈɒpəreɪt/
+compete|/kəmˈpiːt/|/kəmˈpiːt/
+achieve|/əˈtʃiːv/|/əˈtʃiːv/
+succeed|/səkˈsiːd/|/səkˈsiːd/
+complete|/kəmˈpliːt/|/kəmˈpliːt/
+prioritize|/praɪˈɔːrətaɪz/|/praɪˈɒrətaɪz/
+deal with|/ˈdiːl wɪð/|/ˈdiːl wɪð/
+remind|/rɪˈmaɪnd/|/rɪˈmaɪnd/
+recommend|/ˌrekəˈmend/|/ˌrekəˈmend/
+advise|/ədˈvaɪz/|/ədˈvaɪz/
+predict|/prɪˈdɪkt/|/prɪˈdɪkt/
+prove|/pruːv/|/pruːv/
+compare|/kəmˈper/|/kəmˈpeə/
+disagree|/ˌdɪsəˈɡriː/|/ˌdɪsəˈɡriː/
+express|/ɪkˈspres/|/ɪkˈspres/
+purchase|/ˈpɜːrtʃəs/|/ˈpɜːtʃəs/
+deposit|/dɪˈpɑːzɪt/|/dɪˈpɒzɪt/
+transfer|/trænsˈfɜːr/|/trænsˈfɜː/
+refund|/rɪˈfʌnd/|/rɪˈfʌnd/
+haggle|/ˈhæɡl/|/ˈhæɡl/
+bargain|/ˈbɑːrɡən/|/ˈbɑːɡən/
+tip|/tɪp/|/tɪp/
+split|/splɪt/|/splɪt/
+donate|/ˈdoʊneɪt/|/ˈdəʊneɪt/
+rent|/rent/|/rent/
+advertise|/ˈædvərtaɪz/|/ˈædvətaɪz/
+pick|/pɪk/|/pɪk/
+pay back|/ˌpeɪ ˈbæk/|/ˌpeɪ ˈbæk/
+run out of|/ˌrʌn ˈaʊt əv/|/ˌrʌn ˈaʊt əv/
+cheer up|/ˌtʃɪr ˈʌp/|/ˌtʃɪə ˈʌp/
+scare|/sker/|/skeə/
+frighten|/ˈfraɪtn/|/ˈfraɪtn/
+surprise|/sərˈpraɪz/|/səˈpraɪz/
+amaze|/əˈmeɪz/|/əˈmeɪz/
+annoy|/əˈnɔɪ/|/əˈnɔɪ/
+bother|/ˈbɑːðər/|/ˈbɒðə/
+disturb|/dɪˈstɜːrb/|/dɪˈstɜːb/
+please|/pliːz/|/pliːz/
+satisfy|/ˈsætɪsfaɪ/|/ˈsætɪsfaɪ/
+disappoint|/ˌdɪsəˈpɔɪnt/|/ˌdɪsəˈpɔɪnt/
+embarrass|/ɪmˈbærəs/|/ɪmˈbærəs/
+confuse|/kənˈfjuːz/|/kənˈfjuːz/
+raise|/reɪz/|/reɪz/
+bring up|/ˌbrɪŋ ˈʌp/|/ˌbrɪŋ ˈʌp/
+cuddle|/ˈkʌdl/|/ˈkʌdl/
+tickle|/ˈtɪkl/|/ˈtɪkl/
+pinch|/pɪntʃ/|/pɪntʃ/
+celebrate|/ˈselɪbreɪt/|/ˈselɪbreɪt/
+congratulate|/kənˈɡrætʃuleɪt/|/kənˈɡrætʃuleɪt/
+compliment|/ˈkɑːmplɪment/|/ˈkɒmplɪment/
+praise|/preɪz/|/preɪz/
+welcome|/ˈwelkəm/|/ˈwelkəm/
+get along|/ˌɡet əˈlɔːŋ/|/ˌɡet əˈlɒŋ/
+fall out|/ˌfɔːl ˈaʊt/|/ˌfɔːl ˈaʊt/
+make up|/ˌmeɪk ˈʌp/|/ˌmeɪk ˈʌp/
+break up|/ˌbreɪk ˈʌp/|/ˌbreɪk ˈʌp/
+get married|/ˌɡet ˈmærid/|/ˌɡet ˈmærid/
+fall in love|/ˌfɔːl ɪn ˈlʌv/|/ˌfɔːl ɪn ˈlʌv/
+appreciate|/əˈpriːʃieɪt/|/əˈpriːʃieɪt/
+nag|/næɡ/|/næɡ/
+brag|/bræɡ/|/bræɡ/
+whine|/waɪn/|/waɪn/
+shake hands|/ˌʃeɪk ˈhændz/|/ˌʃeɪk ˈhændz/
+keep in touch|/ˌkiːp ɪn ˈtʌtʃ/|/ˌkiːp ɪn ˈtʌtʃ/
+look forward to|/ˌlʊk ˈfɔːrwərd tə/|/ˌlʊk ˈfɔːwəd tə/
+get used to|/ˌɡet ˈjuːst tə/|/ˌɡet ˈjuːst tə/
+put up with|/ˌpʊt ˈʌp wɪð/|/ˌpʊt ˈʌp wɪð/
+let down|/ˌlet ˈdaʊn/|/ˌlet ˈdaʊn/
+count on|/ˈkaʊnt ɑːn/|/ˈkaʊnt ɒn/
+lay|/leɪ/|/leɪ/
+adjust|/əˈdʒʌst/|/əˈdʒʌst/
+detach|/dɪˈtætʃ/|/dɪˈtætʃ/
+connect|/kəˈnekt/|/kəˈnekt/
+disconnect|/ˌdɪskəˈnekt/|/ˌdɪskəˈnekt/
+insert|/ɪnˈsɜːrt/|/ɪnˈsɜːt/
+remove|/rɪˈmuːv/|/rɪˈmuːv/
+fit|/fɪt/|/fɪt/
+match|/mætʃ/|/mætʃ/
+join|/dʒɔɪn/|/dʒɔɪn/
+divide|/dɪˈvaɪd/|/dɪˈvaɪd/
+swap|/swɑːp/|/swɒp/
+move|/muːv/|/muːv/
+lower|/ˈloʊər/|/ˈləʊə/
+hook|/hʊk/|/hʊk/
+stick|/stɪk/|/stɪk/
+unscrew|/ˌʌnˈskruː/|/ˌʌnˈskruː/
+unfold|/ʌnˈfoʊld/|/ʌnˈfəʊld/
+unwrap|/ʌnˈræp/|/ʌnˈræp/
+show|/ʃoʊ/|/ʃəʊ/
+press|/pres/|/pres/
+slide|/slaɪd/|/slaɪd/
+flip|/flɪp/|/flɪp/
+leak|/liːk/|/liːk/
+squash|/skwɑːʃ/|/skwɒʃ/
+crush|/krʌʃ/|/krʌʃ/
+chip|/tʃɪp/|/tʃɪp/
+dent|/dent/|/dent/
+stack|/stæk/|/stæk/
+line|/laɪn/|/laɪn/
+seal|/siːl/|/siːl/
+tear off|/ˌter ˈɔːf/|/ˌteə ˈɒf/
+pull out|/ˌpʊl ˈaʊt/|/ˌpʊl ˈaʊt/
+put back|/ˌpʊt ˈbæk/|/ˌpʊt ˈbæk/
+fetch|/fetʃ/|/fetʃ/
+wink|/wɪŋk/|/wɪŋk/
+clap|/klæp/|/klæp/
+squat|/skwɑːt/|/skwɒt/
+bow|/baʊ/|/baʊ/
+hop|/hɑːp/|/hɒp/
+sit down|/ˌsɪt ˈdaʊn/|/ˌsɪt ˈdaʊn/
+stand up|/ˌstænd ˈʌp/|/ˌstænd ˈʌp/
+turn over|/ˌtɜːrn ˈoʊvər/|/ˌtɜːn ˈəʊvə/
+nod off|/ˌnɑːd ˈɔːf/|/ˌnɒd ˈɒf/
+point at|/ˈpɔɪnt æt/|/ˈpɔɪnt æt/
+wave goodbye|/ˌweɪv ɡʊdˈbaɪ/|/ˌweɪv ɡʊdˈbaɪ/
+smile at|/ˈsmaɪl æt/|/ˈsmaɪl æt/
+look up|/ˌlʊk ˈʌp/|/ˌlʊk ˈʌp/
+look down|/ˌlʊk ˈdaʊn/|/ˌlʊk ˈdaʊn/
+kneel down|/ˌniːl ˈdaʊn/|/ˌniːl ˈdaʊn/
+hold hands|/ˌhoʊld ˈhændz/|/ˌhəʊld ˈhændz/
+fold your arms|/ˌfoʊld jər ˈɑːrmz/|/ˌfəʊld jə ˈɑːmz/
+cross your legs|/ˌkrɔːs jər ˈleɡz/|/ˌkrɒs jə ˈleɡz/
+thaw|/θɔː/|/θɔː/
+bloom|/bluːm/|/bluːm/
+wither|/ˈwɪðər/|/ˈwɪðə/
+sprout|/spraʊt/|/spraʊt/
+ripen|/ˈraɪpən/|/ˈraɪpən/
+rot|/rɑːt/|/rɒt/
+clear up|/ˌklɪr ˈʌp/|/ˌklɪə ˈʌp/
+cool down|/ˌkuːl ˈdaʊn/|/ˌkuːl ˈdaʊn/
+dry up|/ˌdraɪ ˈʌp/|/ˌdraɪ ˈʌp/
+harvest|/ˈhɑːrvɪst/|/ˈhɑːvɪst/
+feed on|/ˈfiːd ɑːn/|/ˈfiːd ɒn/
+meow|/miˈaʊ/|/miˈaʊ/
+quack|/kwæk/|/kwæk/
+chirp|/tʃɜːrp/|/tʃɜːp/
+sting|/stɪŋ/|/stɪŋ/
+play|/pleɪ/|/pleɪ/
+score|/skɔːr/|/skɔː/
+shoot|/ʃuːt/|/ʃuːt/
+cheer|/tʃɪr/|/tʃɪə/
+race|/reɪs/|/reɪs/
+surf|/sɜːrf/|/sɜːf/
+hunt|/hʌnt/|/hʌnt/
+camp|/kæmp/|/kæmp/
+dance|/dæns/|/dɑːns/
+sing|/sɪŋ/|/sɪŋ/
+sketch|/sketʃ/|/sketʃ/
+skate|/skeɪt/|/skeɪt/
+ski|/skiː/|/skiː/
+collect|/kəˈlekt/|/kəˈlekt/
+chill out|/ˌtʃɪl ˈaʊt/|/ˌtʃɪl ˈaʊt/
+go shopping|/ˌɡoʊ ˈʃɑːpɪŋ/|/ˌɡəʊ ˈʃɒpɪŋ/
+go swimming|/ˌɡoʊ ˈswɪmɪŋ/|/ˌɡəʊ ˈswɪmɪŋ/
+work out|/ˌwɜːrk ˈaʊt/|/ˌwɜːk ˈaʊt/
+take part in|/ˌteɪk ˈpɑːrt ɪn/|/ˌteɪk ˈpɑːt ɪn/
+join in|/ˌdʒɔɪn ˈɪn/|/ˌdʒɔɪn ˈɪn/
+enjoy|/ɪnˈdʒɔɪ/|/ɪnˈdʒɔɪ/
+inform|/ɪnˈfɔːrm/|/ɪnˈfɔːm/
+notify|/ˈnoʊtɪfaɪ/|/ˈnəʊtɪfaɪ/
+contact|/ˈkɑːntækt/|/ˈkɒntækt/
+request|/rɪˈkwest/|/rɪˈkwest/
+pray|/preɪ/|/preɪ/
+summarize|/ˈsʌməraɪz/|/ˈsʌməraɪz/
+exaggerate|/ɪɡˈzædʒəreɪt/|/ɪɡˈzædʒəreɪt/
+stutter|/ˈstʌtər/|/ˈstʌtə/
+chatter|/ˈtʃætər/|/ˈtʃætə/
+recite|/rɪˈsaɪt/|/rɪˈsaɪt/
+whistle|/ˈwɪsl/|/ˈwɪsl/
+mishear|/ˌmɪsˈhɪr/|/ˌmɪsˈhɪə/
+misunderstand|/ˌmɪsʌndərˈstænd/|/ˌmɪsʌndəˈstænd/
+overhear|/ˌoʊvərˈhɪr/|/ˌəʊvəˈhɪə/
+eavesdrop|/ˈiːvzdrɑːp/|/ˈiːvzdrɒp/
+reckon|/ˈrekən/|/ˈrekən/
+bet|/bet/|/bet/
+think about|/ˈθɪŋk əˌbaʊt/|/ˈθɪŋk əˌbaʊt/
+think over|/ˌθɪŋk ˈoʊvər/|/ˌθɪŋk ˈəʊvə/
+make up your mind|/ˌmeɪk ʌp jər ˈmaɪnd/|/ˌmeɪk ʌp jə ˈmaɪnd/
+change your mind|/ˌtʃeɪndʒ jər ˈmaɪnd/|/ˌtʃeɪndʒ jə ˈmaɪnd/
+come up with|/ˌkʌm ˈʌp wɪð/|/ˌkʌm ˈʌp wɪð/
+make sure|/ˌmeɪk ˈʃʊr/|/ˌmeɪk ˈʃɔː/
+pay attention|/ˌpeɪ əˈtenʃn/|/ˌpeɪ əˈtenʃn/
+keep in mind|/ˌkiːp ɪn ˈmaɪnd/|/ˌkiːp ɪn ˈmaɪnd/
+look into|/ˌlʊk ˈɪntuː/|/ˌlʊk ˈɪntuː/
+point out|/ˌpɔɪnt ˈaʊt/|/ˌpɔɪnt ˈaʊt/
+speak up|/ˌspiːk ˈʌp/|/ˌspiːk ˈʌp/
+tell off|/ˌtel ˈɔːf/|/ˌtel ˈɒf/
+talk about|/ˈtɔːk əˌbaʊt/|/ˈtɔːk əˌbaʊt/
+ask for|/ˈæsk fɔːr/|/ˈɑːsk fɔː/
+call out|/ˌkɔːl ˈaʊt/|/ˌkɔːl ˈaʊt/
+carry on|/ˌkæri ˈɑːn/|/ˌkæri ˈɒn/
+give up|/ˌɡɪv ˈʌp/|/ˌɡɪv ˈʌp/
+go on|/ˌɡoʊ ˈɑːn/|/ˌɡəʊ ˈɒn/
+hold on|/ˌhoʊld ˈɑːn/|/ˌhəʊld ˈɒn/
+turn down|/ˌtɜːrn ˈdaʊn/|/ˌtɜːn ˈdaʊn/
+agree with|/əˈɡriː wɪð/|/əˈɡriː wɪð/
+care about|/ˈker əˌbaʊt/|/ˈkeə əˌbaʊt/
+worry about|/ˈwɜːri əˌbaʊt/|/ˈwʌri əˌbaʊt/
+believe in|/bɪˈliːv ɪn/|/bɪˈliːv ɪn/
+mix up|/ˌmɪks ˈʌp/|/ˌmɪks ˈʌp/
+get ready|/ˌɡet ˈredi/|/ˌɡet ˈredi/
+get back|/ˌɡet ˈbæk/|/ˌɡet ˈbæk/
+get home|/ˌɡet ˈhoʊm/|/ˌɡet ˈhəʊm/
+go to bed|/ˌɡoʊ tə ˈbed/|/ˌɡəʊ tə ˈbed/
+go home|/ˌɡoʊ ˈhoʊm/|/ˌɡəʊ ˈhəʊm/
+come in|/ˌkʌm ˈɪn/|/ˌkʌm ˈɪn/
+come over|/ˌkʌm ˈoʊvər/|/ˌkʌm ˈəʊvə/
+drop by|/ˌdrɑːp ˈbaɪ/|/ˌdrɒp ˈbaɪ/
+hurry up|/ˌhɜːri ˈʌp/|/ˌhʌri ˈʌp/
+wait for|/ˈweɪt fɔːr/|/ˈweɪt fɔː/
+run late|/ˌrʌn ˈleɪt/|/ˌrʌn ˈleɪt/
+set up|/ˌset ˈʌp/|/ˌset ˈʌp/
+sort out|/ˌsɔːrt ˈaʊt/|/ˌsɔːt ˈaʊt/
+fill in|/ˌfɪl ˈɪn/|/ˌfɪl ˈɪn/
+write down|/ˌraɪt ˈdaʊn/|/ˌraɪt ˈdaʊn/
+cross out|/ˌkrɔːs ˈaʊt/|/ˌkrɒs ˈaʊt/
+turn up|/ˌtɜːrn ˈʌp/|/ˌtɜːn ˈʌp/
+put off|/ˌpʊt ˈɔːf/|/ˌpʊt ˈɒf/
+call off|/ˌkɔːl ˈɔːf/|/ˌkɔːl ˈɒf/
+take back|/ˌteɪk ˈbæk/|/ˌteɪk ˈbæk/
+give back|/ˌɡɪv ˈbæk/|/ˌɡɪv ˈbæk/
+give away|/ˌɡɪv əˈweɪ/|/ˌɡɪv əˈweɪ/
+bring back|/ˌbrɪŋ ˈbæk/|/ˌbrɪŋ ˈbæk/
+hand out|/ˌhænd ˈaʊt/|/ˌhænd ˈaʊt/
+pass on|/ˌpæs ˈɑːn/|/ˌpɑːs ˈɒn/
+try on|/ˌtraɪ ˈɑːn/|/ˌtraɪ ˈɒn/
+take after|/ˌteɪk ˈæftər/|/ˌteɪk ˈɑːftə/
+grow up|/ˌɡroʊ ˈʌp/|/ˌɡrəʊ ˈʌp/
+pick out|/ˌpɪk ˈaʊt/|/ˌpɪk ˈaʊt/
+go back|/ˌɡoʊ ˈbæk/|/ˌɡəʊ ˈbæk/
+go away|/ˌɡoʊ əˈweɪ/|/ˌɡəʊ əˈweɪ/
+run away|/ˌrʌn əˈweɪ/|/ˌrʌn əˈweɪ/
+get lost|/ˌɡet ˈlɔːst/|/ˌɡet ˈlɒst/
+get rid of|/ˌɡet ˈrɪd əv/|/ˌɡet ˈrɪd əv/
+keep on|/ˌkiːp ˈɑːn/|/ˌkiːp ˈɒn/
+keep up with|/ˌkiːp ˈʌp wɪð/|/ˌkiːp ˈʌp wɪð/
+catch up|/ˌkætʃ ˈʌp/|/ˌkætʃ ˈʌp/
+show up|/ˌʃoʊ ˈʌp/|/ˌʃəʊ ˈʌp/
+show off|/ˌʃoʊ ˈɔːf/|/ˌʃəʊ ˈɒf/
+use up|/ˌjuːz ˈʌp/|/ˌjuːz ˈʌp/
+end up|/ˌend ˈʌp/|/ˌend ˈʌp/
+turn into|/ˌtɜːrn ˈɪntuː/|/ˌtɜːn ˈɪntuː/
+look like|/ˈlʊk laɪk/|/ˈlʊk laɪk/
+belong to|/bɪˈlɔːŋ tə/|/bɪˈlɒŋ tə/
+recover|/rɪˈkʌvər/|/rɪˈkʌvə/
+vomit|/ˈvɑːmɪt/|/ˈvɒmɪt/
+cure|/kjʊr/|/kjʊə/
+diagnose|/ˌdaɪəɡˈnoʊs/|/ˈdaɪəɡnəʊz/
+operate|/ˈɑːpəreɪt/|/ˈɒpəreɪt/
+inject|/ɪnˈdʒekt/|/ɪnˈdʒekt/
+vaccinate|/ˈvæksɪneɪt/|/ˈvæksɪneɪt/
+prescribe|/prɪˈskraɪb/|/prɪˈskraɪb/
+fracture|/ˈfræktʃər/|/ˈfræktʃə/
+meditate|/ˈmedɪteɪt/|/ˈmedɪteɪt/
+catch a cold|/ˌkætʃ ə ˈkoʊld/|/ˌkætʃ ə ˈkəʊld/
+get better|/ˌɡet ˈbetər/|/ˌɡet ˈbetə/
+get sick|/ˌɡet ˈsɪk/|/ˌɡet ˈsɪk/
+feel sick|/ˌfiːl ˈsɪk/|/ˌfiːl ˈsɪk/
+pass out|/ˌpæs ˈaʊt/|/ˌpɑːs ˈaʊt/
+come down with|/ˌkʌm ˈdaʊn wɪð/|/ˌkʌm ˈdaʊn wɪð/
+fight off|/ˌfaɪt ˈɔːf/|/ˌfaɪt ˈɒf/
+take medicine|/ˌteɪk ˈmedsn/|/ˌteɪk ˈmedsn/
+see a doctor|/ˌsiː ə ˈdɑːktər/|/ˌsiː ə ˈdɒktə/
+cool off|/ˌkuːl ˈɔːf/|/ˌkuːl ˈɒf/
+wear out|/ˌwer ˈaʊt/|/ˌweə ˈaʊt/
+burn out|/ˌbɜːrn ˈaʊt/|/ˌbɜːn ˈaʊt/
+gain weight|/ˌɡeɪn ˈweɪt/|/ˌɡeɪn ˈweɪt/
+slim down|/ˌslɪm ˈdaʊn/|/ˌslɪm ˈdaʊn/
+breathe in|/ˌbriːð ˈɪn/|/ˌbriːð ˈɪn/
+breathe out|/ˌbriːð ˈaʊt/|/ˌbriːð ˈaʊt/
+blow your nose|/ˌbloʊ jər ˈnoʊz/|/ˌbləʊ jə ˈnəʊz/
+wobble|/ˈwɑːbl/|/ˈwɒbl/
+tilt|/tɪlt/|/tɪlt/
+rotate|/ˈroʊteɪt/|/ˈrəʊteɪt/
+skid|/skɪd/|/skɪd/
+fall over|/ˌfɔːl ˈoʊvər/|/ˌfɔːl ˈəʊvə/
+fall down|/ˌfɔːl ˈdaʊn/|/ˌfɔːl ˈdaʊn/
+trip over|/ˌtrɪp ˈoʊvər/|/ˌtrɪp ˈəʊvə/
+bump into|/ˌbʌmp ˈɪntuː/|/ˌbʌmp ˈɪntuː/
+run into|/ˌrʌn ˈɪntuː/|/ˌrʌn ˈɪntuː/
+go through|/ˌɡoʊ ˈθruː/|/ˌɡəʊ ˈθruː/
+go past|/ˌɡoʊ ˈpæst/|/ˌɡəʊ ˈpɑːst/
+come along|/ˌkʌm əˈlɔːŋ/|/ˌkʌm əˈlɒŋ/
+guide|/ɡaɪd/|/ɡaɪd/
+accompany|/əˈkʌmpəni/|/əˈkʌmpəni/
+spread out|/ˌspred ˈaʊt/|/ˌspred ˈaʊt/
+exit|/ˈeksɪt/|/ˈeksɪt/
+move away|/ˌmuːv əˈweɪ/|/ˌmuːv əˈweɪ/
+stay|/steɪ/|/steɪ/
+accelerate|/əkˈseləreɪt/|/əkˈseləreɪt/
+dodge|/dɑːdʒ/|/dɒdʒ/
+flow|/floʊ/|/fləʊ/
+bubble|/ˈbʌbl/|/ˈbʌbl/
+boil over|/ˌbɔɪl ˈoʊvər/|/ˌbɔɪl ˈəʊvə/
+overflow|/ˌoʊvərˈfloʊ/|/ˌəʊvəˈfləʊ/
+evaporate|/ɪˈvæpəreɪt/|/ɪˈvæpəreɪt/
+expand|/ɪkˈspænd/|/ɪkˈspænd/
+vibrate|/ˈvaɪbreɪt/|/ˈvaɪbreɪt/
+snip|/snɪp/|/snɪp/
+slit|/slɪt/|/slɪt/
+pierce|/pɪrs/|/pɪəs/
+poke|/poʊk/|/pəʊk/
+prick|/prɪk/|/prɪk/
+rip|/rɪp/|/rɪp/
+smash|/smæʃ/|/smæʃ/
+crumble|/ˈkrʌmbl/|/ˈkrʌmbl/
+crumple|/ˈkrʌmpl/|/ˈkrʌmpl/
+crease|/kriːs/|/kriːs/
+knot|/nɑːt/|/nɒt/
+tangle|/ˈtæŋɡl/|/ˈtæŋɡl/
+untangle|/ʌnˈtæŋɡl/|/ʌnˈtæŋɡl/
+sharpen|/ˈʃɑːrpən/|/ˈʃɑːpən/
+spray|/spreɪ/|/spreɪ/
+pump|/pʌmp/|/pʌmp/
+inflate|/ɪnˈfleɪt/|/ɪnˈfleɪt/
+deflate|/dɪˈfleɪt/|/dɪˈfleɪt/
+assemble|/əˈsembl/|/əˈsembl/
+dismantle|/dɪsˈmæntl/|/dɪsˈmæntl/
+tighten up|/ˌtaɪtn ˈʌp/|/ˌtaɪtn ˈʌp/
+acknowledge|/əkˈnɑːlɪdʒ/|/əkˈnɒlɪdʒ/
+anticipate|/ænˈtɪsɪpeɪt/|/ænˈtɪsɪpeɪt/
+comprehend|/ˌkɑːmprɪˈhend/|/ˌkɒmprɪˈhend/
+contemplate|/ˈkɑːntəmpleɪt/|/ˈkɒntəmpleɪt/
+deduce|/dɪˈduːs/|/dɪˈdjuːs/
+infer|/ɪnˈfɜːr/|/ɪnˈfɜː/
+perceive|/pərˈsiːv/|/pəˈsiːv/
+presume|/prɪˈzuːm/|/prɪˈzjuːm/
+speculate|/ˈspekjuleɪt/|/ˈspekjuleɪt/
+reflect|/rɪˈflekt/|/rɪˈflekt/
+foresee|/fɔːrˈsiː/|/fɔːˈsiː/
+overlook|/ˌoʊvərˈlʊk/|/ˌəʊvəˈlʊk/
+disregard|/ˌdɪsrɪˈɡɑːrd/|/ˌdɪsrɪˈɡɑːd/
+deliberate|/dɪˈlɪbəreɪt/|/dɪˈlɪbəreɪt/
+assess|/əˈses/|/əˈses/
+interpret|/ɪnˈtɜːrprɪt/|/ɪnˈtɜːprɪt/
+distinguish|/dɪˈstɪŋɡwɪʃ/|/dɪˈstɪŋɡwɪʃ/
+grasp|/ɡræsp/|/ɡrɑːsp/
+dwell on|/dwel ɑːn/|/dwel ɒn/
+reconsider|/ˌriːkənˈsɪdər/|/ˌriːkənˈsɪdə/
+misjudge|/ˌmɪsˈdʒʌdʒ/|/ˌmɪsˈdʒʌdʒ/
+envisage|/ɪnˈvɪzɪdʒ/|/ɪnˈvɪzɪdʒ/
+conceive|/kənˈsiːv/|/kənˈsiːv/
+ascertain|/ˌæsərˈteɪn/|/ˌæsəˈteɪn/
+recollect|/ˌrekəˈlekt/|/ˌrekəˈlekt/
+fathom|/ˈfæðəm/|/ˈfæðəm/
+weigh up|/weɪ ʌp/|/weɪ ʌp/
+imply|/ɪmˈplaɪ/|/ɪmˈplaɪ/
+hint|/hɪnt/|/hɪnt/
+insinuate|/ɪnˈsɪnjueɪt/|/ɪnˈsɪnjueɪt/
+clarify|/ˈklærəfaɪ/|/ˈklærəfaɪ/
+elaborate|/ɪˈlæbəreɪt/|/ɪˈlæbəreɪt/
+emphasize|/ˈemfəsaɪz/|/ˈemfəsaɪz/
+convey|/kənˈveɪ/|/kənˈveɪ/
+articulate|/ɑːrˈtɪkjuleɪt/|/ɑːˈtɪkjuleɪt/
+assert|/əˈsɜːrt/|/əˈsɜːt/
+maintain|/meɪnˈteɪn/|/meɪnˈteɪn/
+concede|/kənˈsiːd/|/kənˈsiːd/
+dismiss|/dɪsˈmɪs/|/dɪsˈmɪs/
+refute|/rɪˈfjuːt/|/rɪˈfjuːt/
+contradict|/ˌkɑːntrəˈdɪkt/|/ˌkɒntrəˈdɪkt/
+dispute|/dɪˈspjuːt/|/dɪˈspjuːt/
+object|/əbˈdʒekt/|/əbˈdʒekt/
+coax|/koʊks/|/kəʊks/
+dissuade|/dɪˈsweɪd/|/dɪˈsweɪd/
+discourage|/dɪsˈkɜːrɪdʒ/|/dɪsˈkʌrɪdʒ/
+console|/kənˈsoʊl/|/kənˈsəʊl/
+flatter|/ˈflætər/|/ˈflætə/
+boast|/boʊst/|/bəʊst/
+ridicule|/ˈrɪdɪkjuːl/|/ˈrɪdɪkjuːl/
+rebuke|/rɪˈbjuːk/|/rɪˈbjuːk/
+reproach|/rɪˈproʊtʃ/|/rɪˈprəʊtʃ/
+address|/əˈdres/|/əˈdres/
+allude|/əˈluːd/|/əˈluːd/
+ramble|/ˈræmbl/|/ˈræmbl/
+confide|/kənˈfaɪd/|/kənˈfaɪd/
+disclose|/dɪsˈkloʊz/|/dɪsˈkləʊz/
+divulge|/daɪˈvʌldʒ/|/daɪˈvʌldʒ/
+reiterate|/riˈɪtəreɪt/|/riˈɪtəreɪt/
+retract|/rɪˈtrækt/|/rɪˈtrækt/
+cherish|/ˈtʃerɪʃ/|/ˈtʃerɪʃ/
+yearn|/jɜːrn/|/jɜːn/
+loathe|/loʊð/|/ləʊð/
+detest|/dɪˈtest/|/dɪˈtest/
+relish|/ˈrelɪʃ/|/ˈrelɪʃ/
+savour|/ˈseɪvər/|/ˈseɪvə/
+tolerate|/ˈtɑːləreɪt/|/ˈtɒləreɪt/
+brood|/bruːd/|/bruːd/
+sulk|/sʌlk/|/sʌlk/
+fret|/fret/|/fret/
+agonize|/ˈæɡənaɪz/|/ˈæɡənaɪz/
+rejoice|/rɪˈdʒɔɪs/|/rɪˈdʒɔɪs/
+sympathize|/ˈsɪmpəθaɪz/|/ˈsɪmpəθaɪz/
+empathize|/ˈempəθaɪz/|/ˈempəθaɪz/
+indulge|/ɪnˈdʌldʒ/|/ɪnˈdʌldʒ/
+overwhelm|/ˌoʊvərˈwelm/|/ˌəʊvəˈwelm/
+provoke|/prəˈvoʊk/|/prəˈvəʊk/
+infuriate|/ɪnˈfjʊrieɪt/|/ɪnˈfjʊərieɪt/
+exasperate|/ɪɡˈzæspəreɪt/|/ɪɡˈzæspəreɪt/
+intimidate|/ɪnˈtɪmɪdeɪt/|/ɪnˈtɪmɪdeɪt/
+unsettle|/ʌnˈsetl/|/ʌnˈsetl/
+soothe|/suːð/|/suːð/
+humiliate|/hjuːˈmɪlieɪt/|/hjuːˈmɪlieɪt/
+baffle|/ˈbæfl/|/ˈbæfl/
+perplex|/pərˈpleks/|/pəˈpleks/
+captivate|/ˈkæptɪveɪt/|/ˈkæptɪveɪt/
+intrigue|/ɪnˈtriːɡ/|/ɪnˈtriːɡ/
+dismay|/dɪsˈmeɪ/|/dɪsˈmeɪ/
+appal|/əˈpɔːl/|/əˈpɔːl/
+tackle|/ˈtækl/|/ˈtækl/
+overcome|/ˌoʊvərˈkʌm/|/ˌəʊvəˈkʌm/
+resolve|/rɪˈzɑːlv/|/rɪˈzɒlv/
+compromise|/ˈkɑːmprəmaɪz/|/ˈkɒmprəmaɪz/
+endeavour|/ɪnˈdevər/|/ɪnˈdevə/
+strive|/straɪv/|/straɪv/
+persevere|/ˌpɜːrsəˈvɪr/|/ˌpɜːsəˈvɪə/
+persist|/pərˈsɪst/|/pəˈsɪst/
+accomplish|/əˈkɑːmplɪʃ/|/əˈkɒmplɪʃ/
+attain|/əˈteɪn/|/əˈteɪn/
+fulfil|/fʊlˈfɪl/|/fʊlˈfɪl/
+undertake|/ˌʌndərˈteɪk/|/ˌʌndəˈteɪk/
+embark on|/ɪmˈbɑːrk ɑːn/|/ɪmˈbɑːk ɒn/
+initiate|/ɪˈnɪʃieɪt/|/ɪˈnɪʃieɪt/
+implement|/ˈɪmplɪment/|/ˈɪmplɪment/
+facilitate|/fəˈsɪlɪteɪt/|/fəˈsɪlɪteɪt/
+hinder|/ˈhɪndər/|/ˈhɪndə/
+impede|/ɪmˈpiːd/|/ɪmˈpiːd/
+obstruct|/əbˈstrʌkt/|/əbˈstrʌkt/
+thwart|/θwɔːrt/|/θwɔːt/
+jeopardize|/ˈdʒepərdaɪz/|/ˈdʒepədaɪz/
+compensate|/ˈkɑːmpenseɪt/|/ˈkɒmpenseɪt/
+adapt|/əˈdæpt/|/əˈdæpt/
+alter|/ˈɔːltər/|/ˈɔːltə/
+modify|/ˈmɑːdɪfaɪ/|/ˈmɒdɪfaɪ/
+transform|/trænsˈfɔːrm/|/trænsˈfɔːm/
+restore|/rɪˈstɔːr/|/rɪˈstɔː/
+revive|/rɪˈvaɪv/|/rɪˈvaɪv/
+sustain|/səˈsteɪn/|/səˈsteɪn/
+retain|/rɪˈteɪn/|/rɪˈteɪn/
+discard|/dɪˈskɑːrd/|/dɪˈskɑːd/
+dispose of|/dɪˈspoʊz əv/|/dɪˈspəʊz əv/
+neglect|/nɪˈɡlekt/|/nɪˈɡlekt/
+procrastinate|/proʊˈkræstɪneɪt/|/prəʊˈkræstɪneɪt/
+juggle|/ˈdʒʌɡl/|/ˈdʒʌɡl/
+delegate|/ˈdelɪɡeɪt/|/ˈdelɪɡeɪt/
+cater for|/ˈkeɪtər fɔːr/|/ˈkeɪtə fɔː/
+accommodate|/əˈkɑːmədeɪt/|/əˈkɒmədeɪt/
+enhance|/ɪnˈhæns/|/ɪnˈhɑːns/
+diminish|/dɪˈmɪnɪʃ/|/dɪˈmɪnɪʃ/
+dwindle|/ˈdwɪndl/|/ˈdwɪndl/
+deteriorate|/dɪˈtɪriəreɪt/|/dɪˈtɪəriəreɪt/
+escalate|/ˈeskəleɪt/|/ˈeskəleɪt/
+intensify|/ɪnˈtensɪfaɪ/|/ɪnˈtensɪfaɪ/
+plummet|/ˈplʌmɪt/|/ˈplʌmɪt/
+surge|/sɜːrdʒ/|/sɜːdʒ/
+fluctuate|/ˈflʌktʃueɪt/|/ˈflʌktʃueɪt/
+undermine|/ˌʌndərˈmaɪn/|/ˌʌndəˈmaɪn/
+reinforce|/ˌriːɪnˈfɔːrs/|/ˌriːɪnˈfɔːs/
+erode|/ɪˈroʊd/|/ɪˈrəʊd/
+aggravate|/ˈæɡrəveɪt/|/ˈæɡrəveɪt/
+alleviate|/əˈliːvieɪt/|/əˈliːvieɪt/
+curb|/kɜːrb/|/kɜːb/
+restrict|/rɪˈstrɪkt/|/rɪˈstrɪkt/
+broaden|/ˈbrɔːdn/|/ˈbrɔːdn/
+prolong|/prəˈlɔːŋ/|/prəˈlɒŋ/
+accumulate|/əˈkjuːmjəleɪt/|/əˈkjuːmjəleɪt/
+derive|/dɪˈraɪv/|/dɪˈraɪv/
+stem from|/stem frʌm/|/stem frʌm/
+contribute|/kənˈtrɪbjuːt/|/kənˈtrɪbjuːt/
+trigger|/ˈtrɪɡər/|/ˈtrɪɡə/
+induce|/ɪnˈduːs/|/ɪnˈdjuːs/
+generate|/ˈdʒenəreɪt/|/ˈdʒenəreɪt/
+yield|/jiːld/|/jiːld/
+entail|/ɪnˈteɪl/|/ɪnˈteɪl/
+outweigh|/ˌaʊtˈweɪ/|/ˌaʊtˈweɪ/
+surpass|/sərˈpæs/|/səˈpɑːs/
+exceed|/ɪkˈsiːd/|/ɪkˈsiːd/
+prevail|/prɪˈveɪl/|/prɪˈveɪl/
+dominate|/ˈdɑːmɪneɪt/|/ˈdɒmɪneɪt/
+evolve|/iˈvɑːlv/|/iˈvɒlv/
+flourish|/ˈflɜːrɪʃ/|/ˈflʌrɪʃ/
+thrive|/θraɪv/|/θraɪv/
+prosper|/ˈprɑːspər/|/ˈprɒspə/
+nurture|/ˈnɜːrtʃər/|/ˈnɜːtʃə/
+foster|/ˈfɑːstər/|/ˈfɒstə/
+comply|/kəmˈplaɪ/|/kəmˈplaɪ/
+conform|/kənˈfɔːrm/|/kənˈfɔːm/
+defy|/dɪˈfaɪ/|/dɪˈfaɪ/
+rebel|/rɪˈbel/|/rɪˈbel/
+resist|/rɪˈzɪst/|/rɪˈzɪst/
+retaliate|/rɪˈtælieɪt/|/rɪˈtælieɪt/
+reconcile|/ˈrekənsaɪl/|/ˈrekənsaɪl/
+condone|/kənˈdoʊn/|/kənˈdəʊn/
+exclude|/ɪkˈskluːd/|/ɪkˈskluːd/
+isolate|/ˈaɪsəleɪt/|/ˈaɪsəleɪt/
+alienate|/ˈeɪliəneɪt/|/ˈeɪliəneɪt/
+exploit|/ɪkˈsplɔɪt/|/ɪkˈsplɔɪt/
+manipulate|/məˈnɪpjuleɪt/|/məˈnɪpjuleɪt/
+mislead|/ˌmɪsˈliːd/|/ˌmɪsˈliːd/
+impose|/ɪmˈpoʊz/|/ɪmˈpəʊz/
+interfere|/ˌɪntərˈfɪr/|/ˌɪntəˈfɪə/
+intervene|/ˌɪntərˈviːn/|/ˌɪntəˈviːn/
+mediate|/ˈmiːdieɪt/|/ˈmiːdieɪt/
+commit|/kəˈmɪt/|/kəˈmɪt/
+devote|/dɪˈvoʊt/|/dɪˈvəʊt/
+dedicate|/ˈdedɪkeɪt/|/ˈdedɪkeɪt/
+oblige|/əˈblaɪdʒ/|/əˈblaɪdʒ/
+entitle|/ɪnˈtaɪtl/|/ɪnˈtaɪtl/
+deprive|/dɪˈpraɪv/|/dɪˈpraɪv/
+grant|/ɡrænt/|/ɡrɑːnt/
+withhold|/wɪðˈhoʊld/|/wɪðˈhəʊld/
+entrust|/ɪnˈtrʌst/|/ɪnˈtrʌst/
+endorse|/ɪnˈdɔːrs/|/ɪnˈdɔːs/
+cram|/kræm/|/kræm/
+browse|/braʊz/|/braʊz/
+skim|/skɪm/|/skɪm/
+rummage|/ˈrʌmɪdʒ/|/ˈrʌmɪdʒ/
+fumble|/ˈfʌmbl/|/ˈfʌmbl/
+scribble|/ˈskrɪbl/|/ˈskrɪbl/
+jot down|/dʒɑːt daʊn/|/dʒɒt daʊn/
+splurge|/splɜːrdʒ/|/splɜːdʒ/
+squander|/ˈskwɑːndər/|/ˈskwɒndə/
+hoard|/hɔːrd/|/hɔːd/
+unwind|/ˌʌnˈwaɪnd/|/ˌʌnˈwaɪnd/
+doze|/doʊz/|/dəʊz/
+binge|/bɪndʒ/|/bɪndʒ/
+gobble|/ˈɡɑːbl/|/ˈɡɒbl/
+guzzle|/ˈɡʌzl/|/ˈɡʌzl/
+commute|/kəˈmjuːt/|/kəˈmjuːt/
+stumble upon|/ˈstʌmbl əˈpɑːn/|/ˈstʌmbl əˈpɒn/
+mull over|/mʌl ˈoʊvər/|/mʌl ˈəʊvə/
+budge|/bʌdʒ/|/bʌdʒ/
+stash|/stæʃ/|/stæʃ/
+renovate|/ˈrenəveɪt/|/ˈrenəveɪt/
+clutter|/ˈklʌtər/|/ˈklʌtə/
+overhaul|/ˌoʊvərˈhɔːl/|/ˌəʊvəˈhɔːl/
+resume|/rɪˈzuːm/|/rɪˈzjuːm/
+linger on|/ˈlɪŋɡər ɑːn/|/ˈlɪŋɡə ɒn/
+meticulous|/məˈtɪkjələs/|/məˈtɪkjələs/
+conscientious|/ˌkɑːnʃiˈenʃəs/|/ˌkɒnʃiˈenʃəs/
+diligent|/ˈdɪlɪdʒənt/|/ˈdɪlɪdʒənt/
+considerate|/kənˈsɪdərət/|/kənˈsɪdərət/
+compassionate|/kəmˈpæʃənət/|/kəmˈpæʃənət/
+tactful|/ˈtæktfl/|/ˈtæktfl/
+blunt|/blʌnt/|/blʌnt/
+candid|/ˈkændɪd/|/ˈkændɪd/
+outspoken|/aʊtˈspoʊkən/|/aʊtˈspəʊkən/
+assertive|/əˈsɜːrtɪv/|/əˈsɜːtɪv/
+timid|/ˈtɪmɪd/|/ˈtɪmɪd/
+introverted|/ˈɪntrəvɜːrtɪd/|/ˈɪntrəvɜːtɪd/
+outgoing|/ˈaʊtɡoʊɪŋ/|/ˈaʊtɡəʊɪŋ/
+resilient|/rɪˈzɪliənt/|/rɪˈzɪliənt/
+tenacious|/təˈneɪʃəs/|/təˈneɪʃəs/
+resourceful|/rɪˈsɔːrsfl/|/rɪˈsɔːsfl/
+ingenious|/ɪnˈdʒiːniəs/|/ɪnˈdʒiːniəs/
+gullible|/ˈɡʌləbl/|/ˈɡʌləbl/
+sceptical|/ˈskeptɪkl/|/ˈskeptɪkl/
+pessimistic|/ˌpesɪˈmɪstɪk/|/ˌpesɪˈmɪstɪk/
+optimistic|/ˌɑːptɪˈmɪstɪk/|/ˌɒptɪˈmɪstɪk/
+pragmatic|/præɡˈmætɪk/|/præɡˈmætɪk/
+impulsive|/ɪmˈpʌlsɪv/|/ɪmˈpʌlsɪv/
+spontaneous|/spɑːnˈteɪniəs/|/spɒnˈteɪniəs/
+temperamental|/ˌtemprəˈmentl/|/ˌtemprəˈmentl/
+aloof|/əˈluːf/|/əˈluːf/
+reserved|/rɪˈzɜːrvd/|/rɪˈzɜːvd/
+conceited|/kənˈsiːtɪd/|/kənˈsiːtɪd/
+condescending|/ˌkɑːndɪˈsendɪŋ/|/ˌkɒndɪˈsendɪŋ/
+frugal|/ˈfruːɡl/|/ˈfruːɡl/
+stingy|/ˈstɪndʒi/|/ˈstɪndʒi/
+extravagant|/ɪkˈstrævəɡənt/|/ɪkˈstrævəɡənt/
+hypocritical|/ˌhɪpəˈkrɪtɪkl/|/ˌhɪpəˈkrɪtɪkl/
+sincere|/sɪnˈsɪr/|/sɪnˈsɪə/
+devious|/ˈdiːviəs/|/ˈdiːviəs/
+malicious|/məˈlɪʃəs/|/məˈlɪʃəs/
+inquisitive|/ɪnˈkwɪzətɪv/|/ɪnˈkwɪzətɪv/
+witty|/ˈwɪti/|/ˈwɪti/
+eloquent|/ˈeləkwənt/|/ˈeləkwənt/
+gracious|/ˈɡreɪʃəs/|/ˈɡreɪʃəs/
+courteous|/ˈkɜːrtiəs/|/ˈkɜːtiəs/
+hospitable|/hɑːˈspɪtəbl/|/hɒˈspɪtəbl/
+vindictive|/vɪnˈdɪktɪv/|/vɪnˈdɪktɪv/
+petty|/ˈpeti/|/ˈpeti/
+obstinate|/ˈɑːbstɪnət/|/ˈɒbstɪnət/
+indecisive|/ˌɪndɪˈsaɪsɪv/|/ˌɪndɪˈsaɪsɪv/
+dependable|/dɪˈpendəbl/|/dɪˈpendəbl/
+apprehensive|/ˌæprɪˈhensɪv/|/ˌæprɪˈhensɪv/
+wary|/ˈweri/|/ˈweəri/
+hesitant|/ˈhezɪtənt/|/ˈhezɪtənt/
+overwhelmed|/ˌoʊvərˈwelmd/|/ˌəʊvəˈwelmd/
+frustrated|/ˈfrʌstreɪtɪd/|/ˈfrʌstreɪtɪd/
+exasperated|/ɪɡˈzæspəreɪtɪd/|/ɪɡˈzæspəreɪtɪd/
+indignant|/ɪnˈdɪɡnənt/|/ɪnˈdɪɡnənt/
+nostalgic|/nəˈstældʒɪk/|/nəˈstældʒɪk/
+sentimental|/ˌsentɪˈmentl/|/ˌsentɪˈmentl/
+wistful|/ˈwɪstfl/|/ˈwɪstfl/
+melancholy|/ˈmelənkɑːli/|/ˈmelənkɒli/
+elated|/iˈleɪtɪd/|/iˈleɪtɪd/
+ecstatic|/ɪkˈstætɪk/|/ɪkˈstætɪk/
+complacent|/kəmˈpleɪsnt/|/kəmˈpleɪsnt/
+smug|/smʌɡ/|/smʌɡ/
+sheepish|/ˈʃiːpɪʃ/|/ˈʃiːpɪʃ/
+self-conscious|/ˌself ˈkɑːnʃəs/|/ˌself ˈkɒnʃəs/
+mortified|/ˈmɔːrtɪfaɪd/|/ˈmɔːtɪfaɪd/
+flustered|/ˈflʌstərd/|/ˈflʌstəd/
+dumbfounded|/ˌdʌmˈfaʊndɪd/|/ˌdʌmˈfaʊndɪd/
+disillusioned|/ˌdɪsɪˈluːʒnd/|/ˌdɪsɪˈluːʒnd/
+disheartened|/dɪsˈhɑːrtnd/|/dɪsˈhɑːtnd/
+despondent|/dɪˈspɑːndənt/|/dɪˈspɒndənt/
+apathetic|/ˌæpəˈθetɪk/|/ˌæpəˈθetɪk/
+ambivalent|/æmˈbɪvələnt/|/æmˈbɪvələnt/
+contemptuous|/kənˈtemptʃuəs/|/kənˈtemptʃuəs/
+envious|/ˈenviəs/|/ˈenviəs/
+appreciative|/əˈpriːʃətɪv/|/əˈpriːʃətɪv/
+composed|/kəmˈpoʊzd/|/kəmˈpəʊzd/
+serene|/səˈriːn/|/səˈriːn/
+agitated|/ˈædʒɪteɪtɪd/|/ˈædʒɪteɪtɪd/
+distraught|/dɪˈstrɔːt/|/dɪˈstrɔːt/
+frantic|/ˈfræntɪk/|/ˈfræntɪk/
+petrified|/ˈpetrɪfaɪd/|/ˈpetrɪfaɪd/
+vulnerable|/ˈvʌlnərəbl/|/ˈvʌlnərəbl/
+insecure|/ˌɪnsɪˈkjʊr/|/ˌɪnsɪˈkjɔː/
+groggy|/ˈɡrɑːɡi/|/ˈɡrɒɡi/
+drowsy|/ˈdraʊzi/|/ˈdraʊzi/
+famished|/ˈfæmɪʃt/|/ˈfæmɪʃt/
+substantial|/səbˈstænʃl/|/səbˈstænʃl/
+considerable|/kənˈsɪdərəbl/|/kənˈsɪdərəbl/
+negligible|/ˈneɡlɪdʒəbl/|/ˈneɡlɪdʒəbl/
+trivial|/ˈtrɪviəl/|/ˈtrɪviəl/
+crucial|/ˈkruːʃl/|/ˈkruːʃl/
+vital|/ˈvaɪtl/|/ˈvaɪtl/
+indispensable|/ˌɪndɪˈspensəbl/|/ˌɪndɪˈspensəbl/
+inevitable|/ɪnˈevɪtəbl/|/ɪnˈevɪtəbl/
+imminent|/ˈɪmɪnənt/|/ˈɪmɪnənt/
+feasible|/ˈfiːzəbl/|/ˈfiːzəbl/
+viable|/ˈvaɪəbl/|/ˈvaɪəbl/
+plausible|/ˈplɔːzəbl/|/ˈplɔːzəbl/
+credible|/ˈkredəbl/|/ˈkredəbl/
+dubious|/ˈduːbiəs/|/ˈdjuːbiəs/
+ambiguous|/æmˈbɪɡjuəs/|/æmˈbɪɡjuəs/
+explicit|/ɪkˈsplɪsɪt/|/ɪkˈsplɪsɪt/
+implicit|/ɪmˈplɪsɪt/|/ɪmˈplɪsɪt/
+coherent|/koʊˈhɪrənt/|/kəʊˈhɪərənt/
+consistent|/kənˈsɪstənt/|/kənˈsɪstənt/
+adequate|/ˈædɪkwət/|/ˈædɪkwət/
+sufficient|/səˈfɪʃnt/|/səˈfɪʃnt/
+excessive|/ɪkˈsesɪv/|/ɪkˈsesɪv/
+outrageous|/aʊtˈreɪdʒəs/|/aʊtˈreɪdʒəs/
+appalling|/əˈpɔːlɪŋ/|/əˈpɔːlɪŋ/
+admirable|/ˈædmərəbl/|/ˈædmərəbl/
+impeccable|/ɪmˈpekəbl/|/ɪmˈpekəbl/
+flawless|/ˈflɔːləs/|/ˈflɔːləs/
+mediocre|/ˌmiːdiˈoʊkər/|/ˌmiːdiˈəʊkə/
+superficial|/ˌsuːpərˈfɪʃl/|/ˌsuːpəˈfɪʃl/
+profound|/prəˈfaʊnd/|/prəˈfaʊnd/
+thorough|/ˈθɜːroʊ/|/ˈθʌrəʊ/
+comprehensive|/ˌkɑːmprɪˈhensɪv/|/ˌkɒmprɪˈhensɪv/
+tedious|/ˈtiːdiəs/|/ˈtiːdiəs/
+monotonous|/məˈnɑːtənəs/|/məˈnɒtənəs/
+mundane|/mʌnˈdeɪn/|/mʌnˈdeɪn/
+compelling|/kəmˈpelɪŋ/|/kəmˈpelɪŋ/
+gripping|/ˈɡrɪpɪŋ/|/ˈɡrɪpɪŋ/
+daunting|/ˈdɔːntɪŋ/|/ˈdɔːntɪŋ/
+arduous|/ˈɑːrdʒuəs/|/ˈɑːdʒuəs/
+strenuous|/ˈstrenjuəs/|/ˈstrenjuəs/
+gruelling|/ˈɡruːəlɪŋ/|/ˈɡruːəlɪŋ/
+legitimate|/lɪˈdʒɪtɪmət/|/lɪˈdʒɪtɪmət/
+notorious|/noʊˈtɔːriəs/|/nəʊˈtɔːriəs/
+renowned|/rɪˈnaʊnd/|/rɪˈnaʊnd/
+prominent|/ˈprɑːmɪnənt/|/ˈprɒmɪnənt/
+unprecedented|/ʌnˈpresɪdentɪd/|/ʌnˈpresɪdentɪd/
+relevant|/ˈreləvənt/|/ˈreləvənt/
+obsolete|/ˌɑːbsəˈliːt/|/ˌɒbsəˈliːt/
+flimsy|/ˈflɪmzi/|/ˈflɪmzi/
+sturdy|/ˈstɜːrdi/|/ˈstɜːdi/
+desolate|/ˈdesələt/|/ˈdesələt/
+bleak|/bliːk/|/bliːk/
+dreary|/ˈdrɪri/|/ˈdrɪəri/
+ominous|/ˈɑːmɪnəs/|/ˈɒmɪnəs/
+sinister|/ˈsɪnɪstər/|/ˈsɪnɪstə/
+menacing|/ˈmenəsɪŋ/|/ˈmenəsɪŋ/
+tranquil|/ˈtræŋkwɪl/|/ˈtræŋkwɪl/
+idyllic|/aɪˈdɪlɪk/|/ɪˈdɪlɪk/
+picturesque|/ˌpɪktʃəˈresk/|/ˌpɪktʃəˈresk/
+breathtaking|/ˈbreθteɪkɪŋ/|/ˈbreθteɪkɪŋ/
+majestic|/məˈdʒestɪk/|/məˈdʒestɪk/
+ornate|/ɔːrˈneɪt/|/ɔːˈneɪt/
+dilapidated|/dɪˈlæpɪdeɪtɪd/|/dɪˈlæpɪdeɪtɪd/
+derelict|/ˈderəlɪkt/|/ˈderəlɪkt/
+cramped|/kræmpt/|/kræmpt/
+spacious|/ˈspeɪʃəs/|/ˈspeɪʃəs/
+secluded|/sɪˈkluːdɪd/|/sɪˈkluːdɪd/
+bustling|/ˈbʌslɪŋ/|/ˈbʌslɪŋ/
+lush|/lʌʃ/|/lʌʃ/
+barren|/ˈbærən/|/ˈbærən/
+sweltering|/ˈsweltərɪŋ/|/ˈsweltərɪŋ/
+muggy|/ˈmʌɡi/|/ˈmʌɡi/
+murky|/ˈmɜːrki/|/ˈmɜːki/
+dingy|/ˈdɪndʒi/|/ˈdɪndʒi/
+gaudy|/ˈɡɔːdi/|/ˈɡɔːdi/
+pristine|/ˈprɪstiːn/|/ˈprɪstiːn/
+immaculate|/ɪˈmækjələt/|/ɪˈmækjələt/
+cluttered|/ˈklʌtərd/|/ˈklʌtəd/
+austere|/ɔːˈstɪr/|/ɒˈstɪə/
+tattered|/ˈtætərd/|/ˈtætəd/
+threadbare|/ˈθredber/|/ˈθredbeə/
+shadowy|/ˈʃædoʊi/|/ˈʃædəʊi/
+muffled|/ˈmʌfld/|/ˈmʌfld/
+deafening|/ˈdefnɪŋ/|/ˈdefnɪŋ/
+shrill|/ʃrɪl/|/ʃrɪl/
+hoarse|/hɔːrs/|/hɔːs/
+husky|/ˈhʌski/|/ˈhʌski/
+pungent|/ˈpʌndʒənt/|/ˈpʌndʒənt/
+acrid|/ˈækrɪd/|/ˈækrɪd/
+musty|/ˈmʌsti/|/ˈmʌsti/
+stale|/steɪl/|/steɪl/
+succulent|/ˈsʌkjələnt/|/ˈsʌkjələnt/
+laundry|/ˈlɔːndri/|/ˈlɔːndri/
+tidy up|/ˈtaɪdi ʌp/|/ˈtaɪdi ʌp/
+leftovers|/ˈleftoʊvərz/|/ˈleftəʊvəz/
+vacuum|/ˈvækjuːm/|/ˈvækjuːm/
+landlord|/ˈlændlɔːrd/|/ˈlændlɔːd/
+take out the trash|/teɪk aʊt ðə træʃ/|/teɪk aʊt ðə træʃ/
+groceries|/ˈɡroʊsəriz/|/ˈɡrəʊsəriz/
+recipe|/ˈresəpi/|/ˈresəpi/
+starving|/ˈstɑːrvɪŋ/|/ˈstɑːvɪŋ/
+takeaway|/ˈteɪkəweɪ/|/ˈteɪkəweɪ/
+portion|/ˈpɔːrʃn/|/ˈpɔːʃn/
+bland|/blænd/|/blænd/
+craving|/ˈkreɪvɪŋ/|/ˈkreɪvɪŋ/
+snack|/snæk/|/snæk/
+reservation|/ˌrezərˈveɪʃn/|/ˌrezəˈveɪʃn/
+discount|/ˈdɪskaʊnt/|/ˈdɪskaʊnt/
+refund|/ˈriːfʌnd/|/ˈriːfʌnd/
+cashier|/kæˈʃɪr/|/kæˈʃɪə/
+try on|/traɪ ɑːn/|/traɪ ɒn/
+out of stock|/aʊt əv stɑːk/|/aʊt əv stɒk/
+fitting room|/ˈfɪtɪŋ ruːm/|/ˈfɪtɪŋ ruːm/
+checkout|/ˈtʃekaʊt/|/ˈtʃekaʊt/
+exchange|/ɪksˈtʃeɪndʒ/|/ɪksˈtʃeɪndʒ/
+traffic jam|/ˈtræfɪk dʒæm/|/ˈtræfɪk dʒæm/
+fare|/fer/|/feə/
+platform|/ˈplætfɔːrm/|/ˈplætfɔːm/
+delay|/dɪˈleɪ/|/dɪˈleɪ/
+give someone a lift|/ɡɪv ə lɪft/|/ɡɪv ə lɪft/
+crossroads|/ˈkrɔːsroʊdz/|/ˈkrɒsrəʊdz/
+pedestrian|/pəˈdestriən/|/pəˈdestriən/
+rush hour|/ˈrʌʃ aʊər/|/ˈrʌʃ aʊə/
+one-way ticket|/ˌwʌn weɪ ˈtɪkɪt/|/ˌwʌn weɪ ˈtɪkɪt/
+get lost|/ɡet lɔːst/|/ɡet lɒst/
+parking lot|/ˈpɑːrkɪŋ lɑːt/|/ˈpɑːkɪŋ lɒt/
+deadline|/ˈdedlaɪn/|/ˈdedlaɪn/
+day off|/ˌdeɪ ˈɔːf/|/ˌdeɪ ˈɒf/
+salary|/ˈsæləri/|/ˈsæləri/
+meeting|/ˈmiːtɪŋ/|/ˈmiːtɪŋ/
+overtime|/ˈoʊvərtaɪm/|/ˈəʊvətaɪm/
+promotion|/prəˈmoʊʃn/|/prəˈməʊʃn/
+run late|/rʌn leɪt/|/rʌn leɪt/
+apply for|/əˈplaɪ fɔːr/|/əˈplaɪ fɔː/
+take a break|/teɪk ə breɪk/|/teɪk ə breɪk/
+headache|/ˈhedeɪk/|/ˈhedeɪk/
+sore throat|/ˌsɔːr ˈθroʊt/|/ˌsɔː ˈθrəʊt/
+appointment|/əˈpɔɪntmənt/|/əˈpɔɪntmənt/
+prescription|/prɪˈskrɪpʃn/|/prɪˈskrɪpʃn/
+work out|/wɜːrk aʊt/|/wɜːk aʊt/
+allergic|/əˈlɜːrdʒɪk/|/əˈlɜːdʒɪk/
+stay hydrated|/steɪ ˈhaɪdreɪtɪd/|/steɪ ˈhaɪdreɪtɪd/
+stressed out|/ˌstrest ˈaʊt/|/ˌstrest ˈaʊt/
+How's it going?|/haʊz ɪt ˈɡoʊɪŋ/|/haʊz ɪt ˈɡəʊɪŋ/
+No worries|/noʊ ˈwʌriz/|/nəʊ ˈwʌriz/
+Never mind|/ˌnevər ˈmaɪnd/|/ˌnevə ˈmaɪnd/
+It's up to you|/ɪts ʌp tə juː/|/ɪts ʌp tə juː/
+I'm on my way|/aɪm ɑːn maɪ weɪ/|/aɪm ɒn maɪ weɪ/
+Take care|/ˌteɪk ˈker/|/ˌteɪk ˈkeə/
+catch up|/kætʃ ʌp/|/kætʃ ʌp/
+Fair enough|/ˌfer ɪˈnʌf/|/ˌfeə ɪˈnʌf/
+Hang on|/hæŋ ɑːn/|/hæŋ ɒn/
+What a pity|/wʌt ə ˈpɪti/|/wʌt ə ˈpɪti/
+Sounds good|/saʊndz ɡʊd/|/saʊndz ɡʊd/
+My treat|/maɪ triːt/|/maɪ triːt/
+`);
+
+/* Tên khác cũng thông dụng của một từ (Anh-Anh, Anh-Mỹ, cách gọi ngắn...).
+   Mỗi dòng: từ | loại từ | các tên khác, cách nhau bằng dấu phẩy, ghi (Anh)/(Mỹ) nếu chỉ dùng ở một nơi | mã chủ đề (chỉ ghi khi từ trùng nhau ở nhiều chủ đề)
+   Tên khác hiện ở phần ghi chú của từ, và bài gõ từ chấp nhận cả các tên này. */
+A(`
+fridge|n|refrigerator
+stove|n|cooker (Anh), cooktop (Mỹ)
+microwave|n|microwave oven
+tap|n|faucet (Mỹ)
+cupboard|n|cabinet (Mỹ)
+counter|n|countertop (Mỹ), worktop (Anh)
+pan|n|frying pan, skillet (Mỹ)
+cutting board|n|chopping board (Anh)
+strainer|n|sieve
+can opener|n|tin opener (Anh)
+dish rack|n|dish drainer, drying rack
+dish soap|n|washing-up liquid (Anh), dishwashing liquid (Mỹ)
+plastic wrap|n|cling film (Anh), cling wrap
+aluminum foil|n|aluminium foil (Anh), tin foil, foil
+rubbish bin|n|trash can (Mỹ), garbage can (Mỹ), bin
+oven mitt|n|oven glove
+sofa|n|couch
+television|n|TV, telly (Anh)
+remote control|n|remote
+speaker|n|loudspeaker
+air conditioner|n|air con, AC
+picture frame|n|photo frame
+bookshelf|n|bookcase
+socket|n|power outlet (Mỹ), outlet (Mỹ), power point
+light bulb|n|bulb
+extension cord|n|extension lead (Anh), power strip
+switch|n|light switch
+plant pot|n|flowerpot
+duvet|n|comforter (Mỹ), quilt
+wardrobe|n|closet (Mỹ)|bedroom
+chest of drawers|n|dresser (Mỹ)
+bedside table|n|nightstand (Mỹ), night table
+pajamas|n|pyjamas (Anh), PJs
+crib|n|cot (Anh)
+toilet paper|n|toilet roll (Anh), loo roll (Anh)
+bathtub|n|bath (Anh), tub
+washbasin|n|basin, bathroom sink
+shower gel|n|body wash
+dental floss|n|floss
+hairdryer|n|hair dryer, blow-dryer
+cotton bud|n|cotton swab (Mỹ), Q-tip (Mỹ)
+nail clippers|n|nail cutter
+scale|n|scales (Anh), bathroom scale
+towel rail|n|towel rack, towel bar
+dryer|n|tumble dryer (Anh), clothes dryer
+laundry basket|n|laundry hamper (Mỹ), hamper (Mỹ)
+detergent|n|washing powder (Anh), laundry detergent
+clothesline|n|washing line (Anh)
+clothes peg|n|clothespin (Mỹ), peg
+vacuum cleaner|n|vacuum, hoover (Anh)
+trash bag|n|bin bag (Anh), garbage bag (Mỹ), rubbish bag
+doorknob|n|door handle
+elevator|n|lift (Anh)
+mailbox|n|letterbox (Anh), postbox (Anh)
+attic|n|loft (Anh)
+basement|n|cellar
+hallway|n|hall, corridor
+staircase|n|stairs, stairway
+sweater|n|jumper (Anh), pullover
+T-shirt|n|tee, tee shirt
+hoodie|n|hooded sweatshirt
+trousers|n|pants (Mỹ)
+swimsuit|n|swimming costume (Anh), bathing suit (Mỹ)
+zipper|n|zip (Anh)
+sneakers|n|trainers (Anh), running shoes
+high heels|n|heels
+glasses|n|spectacles, specs
+sunglasses|n|shades
+backpack|n|rucksack (Anh)
+face mask|n|mask
+hair tie|n|hair band, hair elastic
+hairpin|n|hair clip, bobby pin (Mỹ)
+keychain|n|key ring
+wet wipes|n|baby wipes, wipes
+sunscreen|n|sunblock, sun cream (Anh)
+diaper|n|nappy (Anh)
+sanitary pad|n|sanitary towel (Anh), pad
+ID card|n|identity card, ID
+banknote|n|note (Anh), bill (Mỹ)
+makeup|n|cosmetics
+phone|n|mobile phone (Anh), mobile (Anh), cell phone (Mỹ), cellphone (Mỹ), smartphone
+power bank|n|portable charger
+computer|n|PC
+headphones|n|headset
+earphones|n|earbuds
+USB stick|n|flash drive, USB drive, thumb drive
+flashlight|n|torch (Anh)
+microphone|n|mic
+app|n|application
+message|n|text message, text
+eraser|n|rubber (Anh)
+sharpener|n|pencil sharpener
+marker|n|marker pen, felt-tip pen
+sticky note|n|Post-it
+tape|n|sticky tape, Scotch tape (Mỹ), Sellotape (Anh)
+rubber band|n|elastic band (Anh)
+wrench|n|spanner (Anh)
+tape measure|n|measuring tape
+toolbox|n|tool kit
+eggplant|n|aubergine (Anh)
+coriander|n|cilantro (Mỹ)
+spring onion|n|green onion (Mỹ), scallion (Mỹ)
+chili|n|chilli (Anh), chili pepper, chilli pepper
+corn|n|maize, sweetcorn (Anh)
+green beans|n|string beans, French beans (Anh)
+bitter melon|n|bitter gourd
+cassava|n|manioc, yuca
+star fruit|n|carambola
+dragon fruit|n|pitaya
+biscuit|n|cookie (Mỹ)
+candy|n|sweets (Anh)
+shrimp|n|prawn (Anh)
+soft drink|n|soda (Mỹ), fizzy drink (Anh), pop
+cooking oil|n|vegetable oil, oil
+chili sauce|n|hot sauce
+ketchup|n|tomato sauce (Anh)
+sidewalk|n|pavement (Anh)
+crosswalk|n|zebra crossing (Anh), pedestrian crossing
+intersection|n|crossroads, junction (Anh)
+roundabout|n|traffic circle (Mỹ)
+traffic light|n|traffic lights, stoplight (Mỹ), traffic signal
+street light|n|streetlight, street lamp, lamppost
+apartment|n|flat (Anh)
+shop|n|store (Mỹ)
+pharmacy|n|chemist's (Anh), drugstore (Mỹ)
+gas station|n|petrol station (Anh), filling station
+trash can|n|rubbish bin (Anh), garbage can (Mỹ), bin
+ATM|n|cash machine, cashpoint (Anh)
+café|n|cafe, coffee shop
+motorbike|n|motorcycle
+bicycle|n|bike
+truck|n|lorry (Anh)
+plane|n|airplane (Mỹ), aeroplane (Anh), aircraft
+fire engine|n|fire truck (Mỹ)
+tire|n|tyre (Anh)
+petrol|n|gasoline (Mỹ), gas (Mỹ)
+license plate|n|number plate (Anh), licence plate (Anh)
+taxi|n|cab
+seat belt|n|safety belt
+stomach|n|belly, tummy
+fingernail|n|nail
+plaster|n|Band-Aid (Mỹ), sticking plaster (Anh)
+injection|n|shot (Mỹ), jab (Anh)
+rice field|n|paddy field, rice paddy, paddy
+buffalo|n|water buffalo
+take out the trash|phr|take out the rubbish (Anh), take out the garbage
+switch on|v|turn on
+switch off|v|turn off
+turn on|v|switch on
+turn off|v|switch off
+queue|v|line up (Mỹ)
+line up|v|queue (Anh)
+vomit|v|throw up, be sick (Anh)
+throw up|v|vomit, be sick (Anh)
+pass out|v|faint
+nod off|v|doze off
+call off|v|cancel
+put off|v|postpone
+postpone|v|put off
+parking lot|n|car park (Anh)
+takeaway|n|takeout (Mỹ)
+bill|n|check (Mỹ)|food
+fitting room|n|changing room (Anh)
+one-way ticket|n|single ticket (Anh), single (Anh)
+give someone a lift|phr|give someone a ride (Mỹ)
+neighbour|n|neighbor (Mỹ)
+colleague|n|coworker, co-worker
+vacuum|v|hoover (Anh)
+practise|v|practice (Mỹ)
+`);
+
 // BỔ SUNG cho từ đã có: từ | loại | câu ví dụ tiếng Anh | đi với (cấu trúc, giới từ) | cách dùng tiếng Việt (bắt đầu bằng + là nối thêm)
 X(`
 fridge|n|Put the milk back in the fridge.|in the fridge|Fridge là cách nói thân mật của refrigerator.
@@ -7772,6 +11240,12 @@ TOPICS.forEach(t => t.words.forEach(w => {
   if (e.coll && !w.coll) w.coll = e.coll;
   if (e.note) { if (e.note.startsWith("+")) w.note = (w.note ? w.note + " " : "") + e.note.slice(1).trim(); else if (!w.note) w.note = e.note; }
 }));
+TOPICS.forEach(t => t.words.forEach(w => {
+  const k = (w.w + "|" + w.pos).toLowerCase();
+  const alt = ALT[k + "@" + t.id] || ALT[k];
+  if (alt) w.alt = alt;
+  if (w.ipa && UKIPA[w.w + "|" + w.ipa]) w.uk = UKIPA[w.w + "|" + w.ipa];
+}));
 
 /* Hình minh họa (emoji) cho danh từ và ghi chú cách dùng */
 const pic = (w) => {
@@ -7812,13 +11286,51 @@ const picHtml = (w, cls) => {
     : `<span class="${cls} as-emoji" aria-hidden="true">${e}</span>`;
 };
 // sau khi lật thẻ / trả lời: cấu trúc đi kèm + giải thích tiếng Việt + câu ví dụ
-const noteHtml = (w, withEx) => (w.coll ? `<p class="note coll"><b>Đi với:</b> ${esc(w.coll)}</p>` : "")
+const noteHtml = (w, withEx) => altHtml(w) + (w.coll ? `<p class="note coll"><b>Đi với:</b> ${esc(w.coll)}</p>` : "")
   + (w.note ? `<p class="note"><b>Cách dùng:</b> ${esc(w.note)}</p>` : "")
   + (withEx && w.ex ? `<p class="note ctx-ex"><b>Ví dụ:</b> ${highlight(w.ex, w.w)}</p>` : "");
 // trước khi trả lời (Anh → Việt): chỉ hiện ngữ cảnh tiếng Anh, không có nghĩa tiếng Việt nên không lộ đáp án
 const ctxHtml = (w) => (w.ex || w.coll) ? `<div class="ctx">${w.ex ? `<p class="ctx-line"><span class="ctx-k">Ngữ cảnh</span>${highlight(w.ex, w.w)} <button class="speak speak-sm" data-speak="${esc(w.ex)}" aria-label="Nghe câu">🔊</button></p>` : ""}${w.coll ? `<p class="ctx-line"><span class="ctx-k">Đi với</span>${esc(enOnly(w.coll))}</p>` : ""}</div>` : "";
 // bỏ phần chú thích tiếng Việt trong ngoặc, ví dụ "pick sb up (đón ai)", để không lộ nghĩa trước khi trả lời
 function enOnly(s) { return String(s).replace(/\s*\([^)]*[^\x00-\x7F][^)]*\)/g, "").trim(); }
+// phiên âm: Anh-Anh (UK) và Anh-Mỹ (US). Từ tự thêm chỉ có 1 phiên âm thì hiện như cũ.
+const ipaHtml = (w, cls = "", tag = "span") => {
+  const ipa = esc(w.ipa || ""), uk = esc(w.uk || "");
+  const inner = uk && ipa ? `<span class="acc">UK</span>${uk} <span class="acc">US</span>${ipa}` : uk ? `<span class="acc">UK</span>${uk}` : ipa;
+  return `<${tag} class="ipa${cls}">${inner}</${tag}>`;
+};
+// tên khác của từ, bỏ chú thích (Anh)/(Mỹ) khi so đáp án gõ
+const altName = (a) => String(a).replace(/\s*\([^)]*\)\s*/g, " ").trim();
+const altHtml = (w) => w.alt && w.alt.length ? `<p class="note alt"><b>Tên khác:</b> ${w.alt.map(esc).join(", ")}</p>` : "";
+// các cách viết được chấp nhận khi gõ đáp án: từ chính, tên khác, và từ khác có cùng nghĩa
+const typedOk = (w, typed) => {
+  const t = norm(typed);
+  return !!t && (t === norm(w.w) || (w.alt || []).some(a => norm(altName(a)) === t) || allWords().some(x => norm(x.vi) === norm(w.vi) && norm(x.w) === t));
+};
+// Giải thích phân biệt khi hỏi Việt → Anh: lấy phần "Cách dùng" nhưng che từ cần tìm (và tên khác, dạng quá khứ) bằng ___,
+// bỏ câu "Ví dụ: ..." tiếng Anh vì thường chứa đáp án.
+function maskAnswer(text, w) {
+  let forms = [w.w, ...(w.alt || []).map(altName), ...(w.forms ? w.forms.split(/[,\/]/) : [])].map(x => x.replace(/[?!.]/g, "").trim()).filter(x => x.length > 1);
+  // cụm từ (dwell on, cater for): che cả từ chính đứng riêng, trừ các động từ rất chung (get, set, take...) vì chúng có mặt trong nhiều cụm khác
+  const COMMON = ["get", "set", "put", "take", "go", "come", "make", "do", "have", "turn", "look", "give", "throw", "cut", "fill", "pick", "keep", "run", "bring", "call", "hold", "pass", "break", "fall", "stay", "show", "wake", "sit", "stand", "lie", "move", "hang", "clear", "a", "the", "be"];
+  forms = forms.concat(forms.filter(f => f.includes(" ")).map(f => f.split(/\s+/)[0]).filter(h => h.length > 2 && !COMMON.includes(h.toLowerCase())));
+  const escRe = (x) => x.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const pats = [...new Set(forms)].sort((a, b) => b.length - a.length).map(f => {
+    const parts = f.split(/\s+/), head = parts[0].toLowerCase(), stems = [head];
+    if (head.endsWith("e")) stems.push(head.slice(0, -1));
+    if (head.endsWith("y")) stems.push(head.slice(0, -1) + "i");
+    if (/[^aeiou][aeiou][bdgklmnprt]$/.test(head)) stems.push(head + head.slice(-1));
+    return "(?:" + stems.map(escRe).join("|") + ")(?:s|es|ed|d|ing|er|ers)?" + parts.slice(1).map(x => "\\s+" + escRe(x)).join("");
+  });
+  if (!pats.length) return text;
+  const re = new RegExp("(^|[^A-Za-z])(" + pats.join("|") + ")(?![A-Za-z])", "gi");
+  return text.replace(re, "$1___");
+}
+const clueHtml = (w) => {
+  if (!w.note) return "";
+  const t = maskAnswer(w.note.replace(/\s*Ví dụ:[^.!?]*(?:[.!?]+|$)/g, " ").replace(/\s+/g, " ").trim(), w);
+  return t ? `<p class="note clue"><b>Gợi ý phân biệt:</b> ${esc(t)}</p>` : "";
+};
 
 /* Lặp lại ngắt quãng (Leitner): hộp 0-5, số ngày chờ trước lần ôn tiếp theo */
 const INTERVALS = [0, 1, 3, 7, 14, 30];
@@ -8128,7 +11640,7 @@ function renderCard() {
       <div class="face front">
         <div class="meta"><span>${esc(w.topic)}</span><span class="box-pill">${s.seen ? "Hộp " + s.box + "/5" : "Từ mới"}</span></div>
         <div class="fc-main"><div class="fc-text"><div class="word">${esc(w.w)}</div>
-        <div><span class="ipa">${esc(w.ipa || "")}</span><span class="pos">${POS_VI[w.pos] || esc(w.pos)}</span></div></div></div>
+        <div>${ipaHtml(w)}<span class="pos">${POS_VI[w.pos] || esc(w.pos)}</span></div></div></div>
         <div class="row spread" style="margin-top:auto"><span class="hint" style="margin-top:0">Bấm thẻ hoặc <span class="kbd">Space</span> để lật</span><button class="speak" data-speak="${esc(w.w)}" aria-label="Nghe phát âm">🔊 Nghe</button></div>
       </div>
       <div class="face back">
@@ -8198,9 +11710,19 @@ let quiz = null;
 let quizDir = store.get("quizDir", "en-vi");
 if (!["en-vi", "vi-en", "type"].includes(quizDir)) quizDir = "en-vi";
 let quizLen = store.get("quizLen", 10);
+// phạm vi kiểm tra: mọi từ trong chủ đề đang chọn / chỉ từ đã học trong chủ đề đó / các từ đã học ở mọi chủ đề
+let quizScope = store.get("quizScope", "topic");
+function quizWords(scope) {
+  if (scope === "learned") return allWords().filter(w => posOk(w) && !isNew(w));
+  const list = wordsFor(topic);
+  return scope === "topicLearned" ? list.filter(w => !isNew(w)) : list;
+}
 function renderQuizSetup() {
-  const pool = wordsFor(topic).filter(w => !isKnown(w));
-  const nKnown = wordsFor(topic).length - pool.length;
+  const nScope = { topic: quizWords("topic").filter(w => !isKnown(w)).length, topicLearned: quizWords("topicLearned").filter(w => !isKnown(w)).length, learned: quizWords("learned").filter(w => !isKnown(w)).length };
+  if (!nScope[quizScope]) quizScope = "topic";
+  const all = quizWords(quizScope), pool = all.filter(w => !isKnown(w));
+  const nKnown = all.length - pool.length;
+  const tName = topic === "due" ? "mục Cần ôn hôm nay" : topic === "multi" ? "các chủ đề đã chọn" : "chủ đề đang chọn";
   const area = document.getElementById("quizArea");
   area.innerHTML = `<div class="panel">
     ${pHead("Bài kiểm tra", "exam")}
@@ -8211,19 +11733,28 @@ function renderQuizSetup() {
           <option value="vi-en">Việt → Anh: xem nghĩa, chọn từ tiếng Anh</option>
           <option value="type">Gõ từ: xem nghĩa tiếng Việt, tự gõ từ tiếng Anh</option>
         </select></label>
+      <label class="field">Phạm vi
+        <select id="q-scope">
+          <option value="topic">Mọi từ trong ${tName} (${nScope.topic} từ)</option>
+          <option value="topicLearned" ${nScope.topicLearned ? "" : "disabled"}>Các từ đã học trong ${tName} (${nScope.topicLearned} từ)</option>
+          <option value="learned" ${nScope.learned ? "" : "disabled"}>Các từ đã học, mọi chủ đề (${nScope.learned} từ)</option>
+        </select></label>
       <label class="field">Số câu
-        <select id="q-len"><option value="5">5</option><option value="10">10</option><option value="20">20</option><option value="50">50</option><option value="0">Tất cả từ trong chủ đề</option></select></label>
+        <select id="q-len"><option value="5">5</option><option value="10">10</option><option value="20">20</option><option value="50">50</option><option value="0">Tất cả từ trong phạm vi</option></select></label>
     </div>
-    <p class="counter" style="margin:0">Chủ đề đang chọn có ${pool.length} từ${nKnown ? ` (đã bỏ ${nKnown} từ bạn đánh dấu “đã biết”)` : ""}. Chọn “Tất cả” để kiểm tra hết, bạn có thể bấm “Kết thúc” giữa chừng.${pool.length < 4 ? " Cần ít nhất 4 từ để làm trắc nghiệm, hãy chọn chủ đề khác." : ""}</p>
+    <p class="counter" style="margin:0">${quizScope === "learned" ? "Các từ bạn đã học ở mọi chủ đề" : quizScope === "topicLearned" ? "Các từ đã học trong " + tName : "Chủ đề đang chọn"} có ${pool.length} từ${nKnown ? ` (đã bỏ ${nKnown} từ bạn đánh dấu “đã biết”)` : ""}. Chọn “Tất cả” để kiểm tra hết, bạn có thể bấm “Kết thúc” giữa chừng.${pool.length < 4 ? " Cần ít nhất 4 từ để làm trắc nghiệm, hãy chọn chủ đề khác." : ""}</p>
     <div class="row"><button class="btn primary" id="q-start" ${pool.length < 4 ? "disabled" : ""}>Bắt đầu</button></div>
   </div>`;
   document.getElementById("q-dir").value = quizDir;
+  document.getElementById("q-scope").value = quizScope;
   document.getElementById("q-len").value = String([5, 10, 20, 50, 0].includes(quizLen) ? quizLen : 10);
 }
 function startQuiz() {
-  quizDir = document.getElementById("q-dir").value; quizLen = +document.getElementById("q-len").value;
-  store.set("quizDir", quizDir); store.set("quizLen", quizLen);
-  const all = wordsFor(topic), pool = all.filter(w => !isKnown(w));
+  // "Làm bài mới" ở trang kết quả không có ô chọn: dùng lại lựa chọn lần trước
+  const $v = (id, d) => { const el = document.getElementById(id); return el ? el.value : d; };
+  quizDir = $v("q-dir", quizDir); quizLen = +$v("q-len", quizLen); quizScope = $v("q-scope", quizScope);
+  store.set("quizDir", quizDir); store.set("quizLen", quizLen); store.set("quizScope", quizScope);
+  const all = quizWords(quizScope), pool = all.filter(w => !isKnown(w));
   const qs = shuffle(pool).slice(0, quizLen ? Math.min(quizLen, pool.length) : pool.length).map(w => {
     const ok = (x) => x.w !== w.w && x.vi !== w.vi;
     let others = shuffle(all.filter(x => ok(x) && x.pos === w.pos)).slice(0, 3);
@@ -8248,17 +11779,17 @@ function renderQuestion() {
   const typing = quizDir === "type";
   const posTag = `<span class="pos" style="margin-left:0">${POS_VI[w.pos] || esc(w.pos)}</span>`;
   const prompt = typing
-    ? `<p class="label" style="margin:0">Gõ từ tiếng Anh có nghĩa là</p><p class="q-prompt">${esc(w.vi)}</p><div class="row">${posTag}<span class="counter" id="hint"></span></div>`
+    ? `<p class="label" style="margin:0">Gõ từ tiếng Anh có nghĩa là</p><p class="q-prompt">${esc(w.vi)}</p><div class="row">${posTag}<span class="counter" id="hint"></span></div>${clueHtml(w)}`
     : showEn
-    ? `<p class="label" style="margin:0">Từ tiếng Anh nào có nghĩa là</p><p class="q-prompt">${esc(w.vi)}</p><div>${posTag}</div>`
-    : `<p class="label" style="margin:0">Từ này nghĩa là gì?</p><p class="q-prompt">${esc(w.w)}</p><div class="row"><span class="ipa">${esc(w.ipa || "")}</span>${posTag}<button class="speak" data-speak="${esc(w.w)}">🔊 Nghe</button></div>${ctxHtml(w)}`;
+    ? `<p class="label" style="margin:0">Từ tiếng Anh nào có nghĩa là</p><p class="q-prompt">${esc(w.vi)}</p><div>${posTag}</div>${clueHtml(w)}`
+    : `<p class="label" style="margin:0">Từ này nghĩa là gì?</p><p class="q-prompt">${esc(w.w)}</p><div class="row">${ipaHtml(w)}${posTag}<button class="speak" data-speak="${esc(w.w)}">🔊 Nghe</button></div>${ctxHtml(w)}`;
   area.innerHTML = `<div class="panel">
     ${quiz.knownUndo && !quiz.knownUndo.answered ? knownNote(quiz.knownUndo.w, "q-known-undo") : ""}
     <div class="row spread"><span class="counter">Câu ${quiz.i + 1} / ${quiz.qs.length}</span><span class="counter">Đúng: ${quiz.score}</span></div>
     ${duckBar(quiz.i / quiz.qs.length)}
     ${prompt}
     ${typing ? `<form class="typebox" id="typeForm" autocomplete="off"><input type="text" id="q-type" placeholder="Gõ từ tiếng Anh rồi bấm Enter" autocapitalize="off" autocorrect="off" spellcheck="false"><button class="btn primary" type="submit">Kiểm tra</button></form>
-    <div class="row"><button class="btn ghost" type="button" id="q-hint">Gợi ý thêm 1 chữ</button><button class="btn ghost" type="button" id="q-skip">Không biết</button>${knowBtn("q-know")}</div>` : `<div class="options">${options.map((o, k) => `<button class="opt" data-opt="${k}"><b>${"ABCD"[k]}</b><span>${showEn ? `${esc(o.w)} <span class="ipa opt-ipa">${esc(o.ipa || "")}</span>` : esc(o.vi)}</span></button>`).join("")}</div>
+    <div class="row"><button class="btn ghost" type="button" id="q-hint">Gợi ý thêm 1 chữ</button><button class="btn ghost" type="button" id="q-skip">Không biết</button>${knowBtn("q-know")}</div>` : `<div class="options">${options.map((o, k) => `<button class="opt" data-opt="${k}"><b>${"ABCD"[k]}</b><span>${showEn ? `${esc(o.w)} ${ipaHtml(o, " opt-ipa")}` : esc(o.vi)}</span></button>`).join("")}</div>
     <div class="row">${knowBtn("q-know")}</div>`}
     <div class="feedback" id="fb">${typing ? "Không phân biệt chữ hoa, chữ thường." : "Chọn đáp án, hoặc bấm phím 1 đến 4."}</div>
     <div class="row spread"><button class="btn primary" id="q-next" hidden>Câu tiếp →</button><button class="btn ghost" id="q-end">Kết thúc</button></div>
@@ -8272,9 +11803,8 @@ function checkTyped(skip) {
   const { w } = quiz.qs[quiz.i];
   const typed = skip ? "" : document.getElementById("q-type").value;
   if (!skip && !typed.trim()) return;
-  // đúng nếu khớp từ này, hoặc một từ khác có cùng nghĩa
-  const t = norm(typed);
-  const ok = !!t && (t === norm(w.w) || allWords().some(x => norm(x.vi) === norm(w.vi) && norm(x.w) === t));
+  // đúng nếu khớp từ này, một tên khác của nó, hoặc một từ khác có cùng nghĩa
+  const ok = typedOk(w, typed);
   showResult(w, ok, typed);
   document.getElementById("q-type").disabled = true;
 }
@@ -8285,8 +11815,8 @@ function showResult(w, ok, typed) {
   const early = grade(w, ok);
   const yours = typed !== undefined && !ok ? (typed.trim() ? `Bạn gõ: <s>${esc(typed.trim())}</s>. ` : "") : "";
   document.getElementById("fb").innerHTML = ok
-    ? `<span class="yay">${duck(YAY[quiz.score % YAY.length], "happy")}<span><b style="color:var(--good)">Quạc quạc, chính xác!</b><br><b>${esc(w.w)}</b> <span class="ipa">${esc(w.ipa || "")}</span> = ${picHtml(w, "pic-xs")} ${esc(w.vi)}${w.forms ? ` · quá khứ: ${esc(w.forms)}` : ""}${noteHtml(w, quizDir !== "en-vi")}</span></span>`
-    : `<span class="yay">${duck("flop")}<span>${yours}Đáp án đúng: <b>${esc(w.w)}</b> <span class="ipa">${esc(w.ipa || "")}</span> nghĩa là “${picHtml(w, "pic-xs")} ${esc(w.vi)}”.${w.forms ? ` Quá khứ: ${esc(w.forms)}.` : ""}${noteHtml(w, quizDir !== "en-vi")}</span></span>`;
+    ? `<span class="yay">${duck(YAY[quiz.score % YAY.length], "happy")}<span><b style="color:var(--good)">Quạc quạc, chính xác!</b><br><b>${esc(w.w)}</b> ${ipaHtml(w)} = ${picHtml(w, "pic-xs")} ${esc(w.vi)}${w.forms ? ` · quá khứ: ${esc(w.forms)}` : ""}${noteHtml(w, quizDir !== "en-vi")}</span></span>`
+    : `<span class="yay">${duck("flop")}<span>${yours}Đáp án đúng: <b>${esc(w.w)}</b> ${ipaHtml(w)} nghĩa là “${picHtml(w, "pic-xs")} ${esc(w.vi)}”.${w.forms ? ` Quá khứ: ${esc(w.forms)}.` : ""}${noteHtml(w, quizDir !== "en-vi")}</span></span>`;
   if (early) document.getElementById("fb").insertAdjacentHTML("beforeend", earlyNote(w));
   document.getElementById("fb").insertAdjacentHTML("beforeend", reportBtn(w));
   if (quizDir !== "en-vi") speak(w.w);
@@ -8355,7 +11885,7 @@ function renderQuizResult() {
     ${kn ? knownNote(kn) : ""}
     <p class="label" style="margin:0">Kết quả</p>
     <div class="result-duck">${duck(pct >= 70 ? "party" : "flop")}</div><div class="row"><span class="score">${quiz.score}/${quiz.qs.length}</span><span>${msg}</span></div>
-    ${quiz.wrong.length ? `<div><p class="label">Từ cần ôn lại</p><ul class="review">${quiz.wrong.map(w => `<li><b>${esc(w.w)}</b><span class="ipa">${esc(w.ipa || "")}</span><span>${esc(w.vi)}</span></li>`).join("")}</ul></div>` : ""}
+    ${quiz.wrong.length ? `<div><p class="label">Từ cần ôn lại</p><ul class="review">${quiz.wrong.map(w => `<li><b>${esc(w.w)}</b>${ipaHtml(w)}<span>${esc(w.vi)}</span></li>`).join("")}</ul></div>` : ""}
     <div class="row"><button class="btn primary" id="q-start">Làm bài mới</button><button class="btn" id="q-setup">Đổi kiểu câu hỏi</button></div>
   </div>`;
   quiz = null;
@@ -8389,8 +11919,8 @@ function renderReviewSetup() {
       <label class="field">Ôn những từ nào
         <select id="rv-src">
           <option value="due" ${n.due ? "" : "disabled"}>Cần ôn hôm nay (${n.due} từ)</option>
-          <option value="topic" ${n.topic ? "" : "disabled"}>Đã học trong ${topic === "multi" ? "các chủ đề đã chọn" : "chủ đề đang chọn"} (${n.topic} từ)</option>
-          <option value="all" ${n.all ? "" : "disabled"}>Tất cả từ đã học (${n.all} từ)</option>
+          <option value="topic" ${n.topic ? "" : "disabled"}>Các từ đã học trong ${topic === "multi" ? "các chủ đề đã chọn" : "chủ đề đang chọn"} (${n.topic} từ)</option>
+          <option value="all" ${n.all ? "" : "disabled"}>Các từ đã học, mọi chủ đề (${n.all} từ)</option>
         </select></label>
       <label class="field">Số từ
         <select id="rv-len"><option value="10">10</option><option value="20">20</option><option value="50">50</option><option value="0">Tất cả</option></select></label>
@@ -8441,24 +11971,24 @@ function renderReview() {
   if (item.type === "card") {
     body = `<div class="rv-card" id="rv-card" tabindex="0">
         <p class="q-prompt">${esc(w.w)}</p>
-        <div class="row"><span class="ipa">${esc(w.ipa || "")}</span>${posTag}<button class="speak" data-speak="${esc(w.w)}">🔊 Nghe</button></div>
+        <div class="row">${ipaHtml(w)}${posTag}<button class="speak" data-speak="${esc(w.w)}">🔊 Nghe</button></div>
         ${ctxHtml(w)}
-        <div id="rv-back" hidden><div class="fc-main" style="margin-top:8px"><p class="vi" style="margin:0">${esc(w.vi)}</p>${picHtml(w, "pic pic-rv")}</div>${w.forms ? `<p class="forms">Quá khứ: <b>${esc(w.forms)}</b></p>` : ""}${w.note ? `<p class="note"><b>Cách dùng:</b> ${esc(w.note)}</p>` : ""}</div>
+        <div id="rv-back" hidden><div class="fc-main" style="margin-top:8px"><p class="vi" style="margin:0">${esc(w.vi)}</p>${picHtml(w, "pic pic-rv")}</div>${w.forms ? `<p class="forms">Quá khứ: <b>${esc(w.forms)}</b></p>` : ""}${altHtml(w)}${w.note ? `<p class="note"><b>Cách dùng:</b> ${esc(w.note)}</p>` : ""}</div>
         <p class="hint" id="rv-flip-hint">Nghĩ ra nghĩa trong đầu, rồi bấm vào thẻ để lật xem đáp án</p>
       </div>
       <div class="row"><button class="btn bad grow" data-rv-grade="0">Chưa nhớ <span class="kbd">1</span></button><button class="btn good grow" data-rv-grade="1">Nhớ rồi <span class="kbd">2</span></button></div>
       <div class="row">${knowBtn("rv-know", "3")}</div>`;
   } else if (item.type === "type") {
-    body = `<p class="label" style="margin:0">Gõ từ tiếng Anh có nghĩa là</p><p class="q-prompt">${esc(w.vi)}</p><div>${posTag}</div>
+    body = `<p class="label" style="margin:0">Gõ từ tiếng Anh có nghĩa là</p><p class="q-prompt">${esc(w.vi)}</p><div>${posTag}</div>${clueHtml(w)}
       <form class="typebox" id="rvTypeForm" autocomplete="off"><input type="text" id="rv-type" placeholder="Gõ từ tiếng Anh rồi bấm Enter" autocapitalize="off" autocorrect="off" spellcheck="false"><button class="btn primary" type="submit">Kiểm tra</button></form>
       <div class="row"><button class="btn bad" type="button" id="rv-skip">Chưa nhớ</button>${knowBtn("rv-know")}</div>`;
   } else {
     const en = item.type === "envi";
     item.options = item.options || rvOptions(w);
     body = (en
-      ? `<p class="label" style="margin:0">Từ này nghĩa là gì?</p><p class="q-prompt">${esc(w.w)}</p><div class="row"><span class="ipa">${esc(w.ipa || "")}</span>${posTag}<button class="speak" data-speak="${esc(w.w)}">🔊 Nghe</button></div>${ctxHtml(w)}`
-      : `<p class="label" style="margin:0">Từ tiếng Anh nào có nghĩa là</p><p class="q-prompt">${esc(w.vi)}</p><div>${posTag}</div>`)
-      + `<div class="options">${item.options.map((o, k) => `<button class="opt" data-rv-opt="${k}"><b>${"ABCD"[k]}</b><span>${en ? esc(o.vi) : `${esc(o.w)} <span class="ipa opt-ipa">${esc(o.ipa || "")}</span>`}</span></button>`).join("")}</div>
+      ? `<p class="label" style="margin:0">Từ này nghĩa là gì?</p><p class="q-prompt">${esc(w.w)}</p><div class="row">${ipaHtml(w)}${posTag}<button class="speak" data-speak="${esc(w.w)}">🔊 Nghe</button></div>${ctxHtml(w)}`
+      : `<p class="label" style="margin:0">Từ tiếng Anh nào có nghĩa là</p><p class="q-prompt">${esc(w.vi)}</p><div>${posTag}</div>${clueHtml(w)}`)
+      + `<div class="options">${item.options.map((o, k) => `<button class="opt" data-rv-opt="${k}"><b>${"ABCD"[k]}</b><span>${en ? esc(o.vi) : `${esc(o.w)} ${ipaHtml(o, " opt-ipa")}`}</span></button>`).join("")}</div>
       <div class="row"><button class="btn bad" type="button" id="rv-skip">Chưa nhớ</button>${knowBtn("rv-know")}</div>`;
   }
   area.innerHTML = `<div class="panel">${head}${body}${tail}</div>`;
@@ -8488,8 +12018,8 @@ function rvAnswer(ok, typed) {
   if (item.options) document.querySelectorAll(".opt").forEach((b, j) => { if (item.options[j].w === w.w) b.classList.add("right"); });
   const yours = typed && typed.trim() && !ok ? `Bạn gõ: <s>${esc(typed.trim())}</s>. ` : "";
   document.getElementById("rv-fb").innerHTML = ok
-    ? `<span class="yay">${duck(YAY[rv.done.size % YAY.length], "happy")}<span><b style="color:var(--good)">Quạc quạc, nhớ rồi!</b><br><b>${esc(w.w)}</b> <span class="ipa">${esc(w.ipa || "")}</span> = ${picHtml(w, "pic-xs")} ${esc(w.vi)}${w.forms ? ` · quá khứ: ${esc(w.forms)}` : ""}${noteHtml(w, item.type !== "envi" && item.type !== "card")}<span class="row" id="rv-undo-row" style="margin-top:8px"><button class="btn bad" type="button" id="rv-undo">Vẫn chưa nhớ, hỏi lại sau</button></span></span></span>`
-    : `<span class="yay">${duck("flop")}<span>${yours}<b>${esc(w.w)}</b> <span class="ipa">${esc(w.ipa || "")}</span> nghĩa là “${picHtml(w, "pic-xs")} ${esc(w.vi)}”.${w.forms ? ` Quá khứ: ${esc(w.forms)}.` : ""}${noteHtml(w, item.type !== "envi" && item.type !== "card")}<span class="counter">Từ này sẽ được hỏi lại sau vài câu.</span></span></span>`;
+    ? `<span class="yay">${duck(YAY[rv.done.size % YAY.length], "happy")}<span><b style="color:var(--good)">Quạc quạc, nhớ rồi!</b><br><b>${esc(w.w)}</b> ${ipaHtml(w)} = ${picHtml(w, "pic-xs")} ${esc(w.vi)}${w.forms ? ` · quá khứ: ${esc(w.forms)}` : ""}${noteHtml(w, item.type !== "envi" && item.type !== "card")}<span class="row" id="rv-undo-row" style="margin-top:8px"><button class="btn bad" type="button" id="rv-undo">Vẫn chưa nhớ, hỏi lại sau</button></span></span></span>`
+    : `<span class="yay">${duck("flop")}<span>${yours}<b>${esc(w.w)}</b> ${ipaHtml(w)} nghĩa là “${picHtml(w, "pic-xs")} ${esc(w.vi)}”.${w.forms ? ` Quá khứ: ${esc(w.forms)}.` : ""}${noteHtml(w, item.type !== "envi" && item.type !== "card")}<span class="counter">Từ này sẽ được hỏi lại sau vài câu.</span></span></span>`;
   if (early) document.getElementById("rv-fb").insertAdjacentHTML("beforeend", earlyNote(w));
   document.getElementById("rv-fb").insertAdjacentHTML("beforeend", reportBtn(w));
   if (item.type !== "envi") speak(w.w);
@@ -8548,7 +12078,7 @@ function rvOpt(k) {
 function rvTyped() {
   const w = rv.q[rv.i].w, typed = document.getElementById("rv-type").value, t = norm(typed);
   if (!t) return;
-  rvAnswer(t === norm(w.w) || allWords().some(x => norm(x.vi) === norm(w.vi) && norm(x.w) === t), typed);
+  rvAnswer(typedOk(w, typed), typed);
 }
 function rvEnd() {
   rv.q = rv.q.slice(0, rv.i + 1);
@@ -8566,7 +12096,7 @@ function renderReviewResult() {
     <p class="label" style="margin:0">Xong lượt ôn</p>
     <div class="result-duck">${duck(pct >= 70 ? "party" : "float", pct >= 70 ? "happy" : "plain")}</div>
     <div class="row"><span class="score">${rv.firstOk}/${rv.total}</span><span>từ nhớ ngay từ lần hỏi đầu.</span></div>
-    ${missed.length ? `<div><p class="label">Từ đã sai trong lượt này (sẽ được ưu tiên ôn lần sau)</p><ul class="review">${missed.map(w => `<li><b>${esc(w.w)}</b><span class="ipa">${esc(w.ipa || "")}</span><span>${esc(w.vi)}</span></li>`).join("")}</ul></div>` : ""}
+    ${missed.length ? `<div><p class="label">Từ đã sai trong lượt này (sẽ được ưu tiên ôn lần sau)</p><ul class="review">${missed.map(w => `<li><b>${esc(w.w)}</b>${ipaHtml(w)}<span>${esc(w.vi)}</span></li>`).join("")}</ul></div>` : ""}
     <div class="row">${missed.length ? `<button class="btn primary" id="rv-again-missed">Ôn lại ${missed.length} từ đã sai</button>` : ""}<button class="btn ${missed.length ? "" : "primary"}" id="rv-new">Lượt ôn mới</button></div>
   </div>`;
   rv.missedList = missed;
@@ -8615,8 +12145,8 @@ function renderLookup() {
     const [cls, label] = statusOf(w);
     return head + `<div class="lk">
       <button class="speak" data-speak="${esc(w.w)}" aria-label="Nghe ${esc(w.w)}">🔊</button>
-      <div class="lk-en">${picHtml(w, "pic-sm")}<b>${esc(w.w)}</b> <span class="pos">${POS_VI[w.pos] || esc(w.pos)}</span><div class="ipa">${esc(w.ipa || "")}</div></div>
-      <div class="lk-vi">${esc(w.vi)}${w.forms ? `<div class="counter">quá khứ: ${esc(w.forms)}</div>` : ""}${w.note || w.ex || w.coll ? `<details class="lk-note"><summary>Cách dùng, ví dụ</summary>${w.coll ? `<div><b>Đi với:</b> ${esc(w.coll)}</div>` : ""}${w.note ? `<div>${esc(w.note)}</div>` : ""}${w.ex ? `<div><i>${highlight(w.ex, w.w)}</i></div>` : ""}</details>` : ""}${q ? `<div class="counter">${esc(w.topic)}</div>` : ""}</div>
+      <div class="lk-en">${picHtml(w, "pic-sm")}<b>${esc(w.w)}</b> <span class="pos">${POS_VI[w.pos] || esc(w.pos)}</span>${ipaHtml(w, "", "div")}</div>
+      <div class="lk-vi">${esc(w.vi)}${w.forms ? `<div class="counter">quá khứ: ${esc(w.forms)}</div>` : ""}${w.alt ? `<div class="counter">tên khác: ${w.alt.map(esc).join(", ")}</div>` : ""}${w.note || w.ex || w.coll ? `<details class="lk-note"><summary>Cách dùng, ví dụ</summary>${w.coll ? `<div><b>Đi với:</b> ${esc(w.coll)}</div>` : ""}${w.note ? `<div>${esc(w.note)}</div>` : ""}${w.ex ? `<div><i>${highlight(w.ex, w.w)}</i></div>` : ""}</details>` : ""}${q ? `<div class="counter">${esc(w.topic)}</div>` : ""}</div>
       <span class="lk-act"><span class="st st-${cls}" title="${label}">${label}</span>${cls === "done" || cls === "known" ? `<button class="mini" data-relearn="${esc(keyOf(w))}">↺ Học lại</button>` : `<button class="mini" data-know="${esc(keyOf(w))}">✓ Đã biết</button>`}<button class="mini" data-report="${esc(keyOf(w))}" aria-label="Báo lỗi ${esc(w.w)}">⚑ Báo lỗi</button></span></div>`;
   }).join("") || `<p class="counter">Không tìm thấy. Bạn có thể tự thêm ở tab “Thêm từ”.</p>`;
 }
@@ -8639,7 +12169,7 @@ function renderMastered() {
     ${all.length ? `<div class="chips">${[["all", "Tất cả", all.length], ["known", "Bấm “đã biết”", nk], ["box", `Nhớ đúng ${MASTERED_BOX} lần`, all.length - nk]].map(([k, n, c]) => `<button class="chip" data-mfilter="${k}" aria-pressed="${k === mFilter}">${n} <small>${c}</small></button>`).join("")}</div>
     <label class="field">Tìm trong từ đã thuộc<input type="text" id="m-q" placeholder="tiếng Anh hoặc tiếng Việt" autocomplete="off"></label>
     <div class="row spread"><span class="counter" id="m-info">${list.length} từ</span><span id="m-bulk">${list.length ? `<button class="btn" id="m-all">↺ Học lại cả ${list.length} từ này</button>` : ""}</span></div>
-    <div class="mlist">${list.slice(0, mShow).map(w => `<div class="mrow"><span><b>${esc(w.w)}</b> <span class="ipa">${esc(w.ipa || "")}</span> · ${esc(w.vi)}</span><span class="st ${isKnown(w) ? "st-known" : "st-done"}">${isKnown(w) ? "Đã biết" : "Hộp " + stateOf(w).box}</span><button class="mini" data-relearn="${esc(keyOf(w))}">↺ Học lại</button></div>`).join("")}</div>
+    <div class="mlist">${list.slice(0, mShow).map(w => `<div class="mrow"><span><b>${esc(w.w)}</b> ${ipaHtml(w)} · ${esc(w.vi)}</span><span class="st ${isKnown(w) ? "st-known" : "st-done"}">${isKnown(w) ? "Đã biết" : "Hộp " + stateOf(w).box}</span><button class="mini" data-relearn="${esc(keyOf(w))}">↺ Học lại</button></div>`).join("")}</div>
     ${list.length > mShow ? `<div class="row"><button class="btn ghost" id="m-more">Hiện thêm (${list.length - mShow} từ nữa)</button></div>` : ""}`
     : `<p class="counter" style="margin:0">Chưa có từ nào. Trên thẻ từ, bấm “✓ Từ này mình biết rồi” cho những từ bạn chắc chắn đã biết.</p>`}`;
   const inp = document.getElementById("m-q");
@@ -8665,7 +12195,7 @@ function openReport(w) {
   const m = document.getElementById("reportModal");
   m.innerHTML = `<form class="panel" id="reportForm" role="dialog" aria-modal="true" aria-labelledby="rp-title" data-key="${esc(keyOf(w))}">
     <p class="label" style="margin:0" id="rp-title">Báo lỗi từ</p>
-    <div class="row">${picHtml(w, "pic-sm")}<span><b style="font-size:1.2rem">${esc(w.w)}</b> <span class="ipa">${esc(w.ipa || "")}</span> <span class="pos">${POS_VI[w.pos] || esc(w.pos)}</span><br>${esc(w.vi)}</span></div>
+    <div class="row">${picHtml(w, "pic-sm")}<span><b style="font-size:1.2rem">${esc(w.w)}</b> ${ipaHtml(w)} <span class="pos">${POS_VI[w.pos] || esc(w.pos)}</span><br>${esc(w.vi)}</span></div>
     <div class="rp-types">${Object.entries(RP_TYPES).map(([k, v]) => `<label><input type="checkbox" name="rp" value="${k}"> ${v}</label>`).join("")}</div>
     <label class="field">Ghi chú (không bắt buộc)<textarea id="rp-note" maxlength="1000" placeholder="vd: hình cái ấm trông giống cái bình; nên thêm ví dụ khi nào dùng ‘in’, khi nào dùng ‘on’"></textarea></label>
     <p class="counter" style="margin:0" id="rp-msg"></p>
@@ -8855,6 +12385,8 @@ document.addEventListener("input", (e) => { if (e.target.id === "m-q") { mShow =
 document.addEventListener("change", (e) => {
   if (e.target.id === "rp-file" && e.target.files.length) importFiles(e.target.files);
   if (e.target.id === "rp-hide") { rpHideFixed = e.target.checked; renderReports(); }
+  // đổi phạm vi kiểm tra: vẽ lại để cập nhật số từ, giữ kiểu câu hỏi và số câu đang chọn
+  if (e.target.id === "q-scope") { quizScope = e.target.value; store.set("quizScope", quizScope); const d = document.getElementById("q-dir").value, l = document.getElementById("q-len").value; renderQuizSetup(); document.getElementById("q-dir").value = d; document.getElementById("q-len").value = l; }
 });
 document.addEventListener("toggle", (e) => { if (e.target.id === "rp-owner") store.set("rpOwnerOpen", e.target.open); }, true);
 document.addEventListener("submit", (e) => {
@@ -8870,7 +12402,7 @@ document.getElementById("topicSel").addEventListener("change", (e) => {
   topic = e.target.value; store.set("topic", topic); renderChips(); refreshTab(); });
 document.getElementById("addForm").addEventListener("submit", (e) => {
   e.preventDefault();
-  const w = { w: document.getElementById("f-w").value.trim(), vi: document.getElementById("f-vi").value.trim(), ipa: document.getElementById("f-ipa").value.trim(), pos: document.getElementById("f-pos").value, ex: document.getElementById("f-ex").value.trim() };
+  const w = { w: document.getElementById("f-w").value.trim(), vi: document.getElementById("f-vi").value.trim(), ipa: document.getElementById("f-ipa").value.trim(), uk: document.getElementById("f-uk").value.trim() || undefined, pos: document.getElementById("f-pos").value, ex: document.getElementById("f-ex").value.trim() };
   if (!w.w || !w.vi) return;
   if (allWords().some(x => keyOf(x) === keyOf(w))) return toast("Từ này đã có trong sổ.");
   mine.push(w); store.set("mine", mine);
